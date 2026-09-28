@@ -34,6 +34,15 @@ namespace Inventory_Management_System.DataAccess
                 FullName = "Warehouse Operator",
                 Role = "Staff",
                 CreatedAt = DateTime.Now
+            },
+            new User
+            {
+                UserID = 3,
+                Username = "sales",
+                PasswordHash = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+                FullName = "Sales Representative",
+                Role = "Sales Staff",
+                CreatedAt = DateTime.Now
             }
         };
 

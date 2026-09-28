@@ -15,15 +15,25 @@ namespace Inventory_Management_System.BusinessLogic
     {
         private readonly IProductRepository _productRepository;
         private readonly ITransactionRepository _transactionRepository;
+        private readonly ICategoryRepository _categoryRepository;
+        private readonly ITelegramService _telegramService;
 
-        public InventoryService(IProductRepository productRepository, ITransactionRepository transactionRepository)
+        public ITelegramService TelegramService => _telegramService;
+
+        public InventoryService(
+            IProductRepository productRepository, 
+            ITransactionRepository transactionRepository, 
+            ICategoryRepository? categoryRepository = null, 
+            ITelegramService? telegramService = null)
         {
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _transactionRepository = transactionRepository ?? throw new ArgumentNullException(nameof(transactionRepository));
+            _categoryRepository = categoryRepository ?? new CategoryRepository();
+            _telegramService = telegramService ?? BusinessLogic.TelegramService.Instance;
         }
 
         public InventoryService() 
-            : this(new ProductRepository(), new TransactionRepository())
+            : this(new ProductRepository(), new TransactionRepository(), new CategoryRepository(), BusinessLogic.TelegramService.Instance)
         {
         }
 
@@ -110,14 +120,42 @@ namespace Inventory_Management_System.BusinessLogic
         {
             if (product == null) throw new ArgumentNullException(nameof(product));
             if (product.ProductID <= 0) throw new ArgumentException("Invalid Product ID.", nameof(product.ProductID));
+            if (string.IsNullOrWhiteSpace(product.SKU)) throw new ArgumentException("Product SKU is required.", nameof(product.SKU));
+            if (string.IsNullOrWhiteSpace(product.ProductName)) throw new ArgumentException("Product Name is required.", nameof(product.ProductName));
 
-            var existing = _productRepository.GetBySku(product.SKU.Trim());
+            string trimmedSku = product.SKU.Trim();
+            var existing = _productRepository.GetBySku(trimmedSku);
             if (existing != null && existing.ProductID != product.ProductID)
             {
-                throw new DuplicateSkuException(product.SKU.Trim());
+                throw new DuplicateSkuException(trimmedSku);
             }
 
-            return _productRepository.Update(product);
+            product.SKU = trimmedSku;
+            product.ProductName = product.ProductName.Trim();
+            bool updated = _productRepository.Update(product);
+            if (updated && (product.IsOutOfStock() || product.IsLowStock()))
+            {
+                if (_telegramService != null)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            if (product.IsOutOfStock())
+                            {
+                                await _telegramService.SendOutOfStockAlertAsync(product);
+                            }
+                            else
+                            {
+                                await _telegramService.SendLowStockAlertAsync(product);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+            }
+
+            return updated;
         }
 
         public bool DeleteProduct(int productId)
@@ -170,7 +208,65 @@ namespace Inventory_Management_System.BusinessLogic
                 TransactionDate = DateTime.Now
             };
 
-            return _transactionRepository.RecordStockTransaction(transaction);
+            // Calculate new stock immediately based on domain transaction logic
+            int expectedNewStock = normalizedType == "OUT" 
+                ? (product.CurrentStock - quantity) 
+                : (normalizedType == "IN" ? product.CurrentStock + quantity : quantity);
+
+            long txId = _transactionRepository.RecordStockTransaction(transaction);
+
+            // Trigger real-time Telegram alert if product drops to Low Stock or Out of Stock
+            if (normalizedType == "OUT" || normalizedType == "ADJUSTMENT")
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Prefer freshly queried product, fall back to current product with calculated stock
+                        Product? alertProduct = null;
+                        try
+                        {
+                            alertProduct = _productRepository.GetById(productId);
+                        }
+                        catch { }
+
+                        if (alertProduct == null)
+                        {
+                            alertProduct = new Product
+                            {
+                                ProductID = product.ProductID,
+                                SKU = product.SKU,
+                                Barcode = product.Barcode,
+                                ProductName = product.ProductName,
+                                CategoryID = product.CategoryID,
+                                CategoryName = product.CategoryName,
+                                SupplierID = product.SupplierID,
+                                SupplierName = product.SupplierName,
+                                CostPrice = product.CostPrice,
+                                SellingPrice = product.SellingPrice,
+                                CurrentStock = expectedNewStock,
+                                ReorderLevel = product.ReorderLevel,
+                                ImagePath = product.ImagePath
+                            };
+                        }
+
+                        if (alertProduct.IsOutOfStock())
+                        {
+                            await _telegramService.SendOutOfStockAlertAsync(alertProduct, force: true);
+                        }
+                        else if (alertProduct.IsLowStock())
+                        {
+                            await _telegramService.SendLowStockAlertAsync(alertProduct, force: true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[TelegramAlert Error]: {ex.Message}");
+                    }
+                });
+            }
+
+            return txId;
         }
 
         public IEnumerable<StockTransaction> GetRecentTransactions(int limit = 100)
@@ -208,6 +304,82 @@ namespace Inventory_Management_System.BusinessLogic
 
             return GetFallbackCategoryValuations();
         }
+
+        #region Category Management Operations
+
+        public IEnumerable<Category> GetAllCategories()
+        {
+            try
+            {
+                return _categoryRepository.GetAll();
+            }
+            catch (Exception)
+            {
+                return GetFallbackCategories();
+            }
+        }
+
+        public Category? GetCategoryById(int categoryId)
+        {
+            if (categoryId <= 0) throw new ArgumentException("Category ID must be greater than zero.", nameof(categoryId));
+            return _categoryRepository.GetById(categoryId);
+        }
+
+        public int CreateCategory(Category category)
+        {
+            if (category == null) throw new ArgumentNullException(nameof(category));
+            if (string.IsNullOrWhiteSpace(category.CategoryName)) throw new ArgumentException("Category Name is required.", nameof(category.CategoryName));
+
+            string trimmedName = category.CategoryName.Trim();
+            var existing = _categoryRepository.GetByName(trimmedName);
+            if (existing != null)
+            {
+                throw new InvalidOperationException($"A category named '{trimmedName}' already exists in the catalog.");
+            }
+
+            category.CategoryName = trimmedName;
+            category.Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description.Trim();
+            return _categoryRepository.Insert(category);
+        }
+
+        public bool UpdateCategory(Category category)
+        {
+            if (category == null) throw new ArgumentNullException(nameof(category));
+            if (category.CategoryID <= 0) throw new ArgumentException("Invalid Category ID.", nameof(category.CategoryID));
+            if (string.IsNullOrWhiteSpace(category.CategoryName)) throw new ArgumentException("Category Name is required.", nameof(category.CategoryName));
+
+            string trimmedName = category.CategoryName.Trim();
+            var existing = _categoryRepository.GetByName(trimmedName);
+            if (existing != null && existing.CategoryID != category.CategoryID)
+            {
+                throw new InvalidOperationException($"A category named '{trimmedName}' already exists in the catalog.");
+            }
+
+            category.CategoryName = trimmedName;
+            category.Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description.Trim();
+            return _categoryRepository.Update(category);
+        }
+
+        public bool DeleteCategory(int categoryId)
+        {
+            if (categoryId <= 0) throw new ArgumentException("Invalid Category ID.", nameof(categoryId));
+
+            int linkedProducts = _categoryRepository.GetProductCount(categoryId);
+            if (linkedProducts > 0)
+            {
+                throw new InvalidOperationException($"Cannot delete category because it is currently assigned to {linkedProducts} active product(s). Please reassign or remove those products before deleting.");
+            }
+
+            return _categoryRepository.Delete(categoryId);
+        }
+
+        public int GetProductCountByCategoryId(int categoryId)
+        {
+            if (categoryId <= 0) return 0;
+            return _categoryRepository.GetProductCount(categoryId);
+        }
+
+        #endregion
 
         #region Fallback Data Providers (Resilience & Offline Academic Demo Mode)
 
@@ -276,6 +448,17 @@ namespace Inventory_Management_System.BusinessLogic
                 new StockTransaction { TransactionID = 106, ProductID = 7, SKU = "OFF-PAP-007", ProductName = "Multipurpose A4 Copy Paper (5-Ream Box)", TransactionType = "IN", Quantity = 60, UnitPrice = 18.00m, ReferenceNo = "PO-2026-006", Notes = "Pallet replenishment", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-10) },
                 new StockTransaction { TransactionID = 107, ProductID = 7, SKU = "OFF-PAP-007", ProductName = "Multipurpose A4 Copy Paper (5-Ream Box)", TransactionType = "OUT", Quantity = 10, UnitPrice = 29.50m, ReferenceNo = "SO-2026-045", Notes = "Branch transfer", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-2) },
                 new StockTransaction { TransactionID = 108, ProductID = 8, SKU = "OFF-PEN-008", ProductName = "Retractable Gel Pens 0.7mm (Box of 24)", TransactionType = "IN", Quantity = 40, UnitPrice = 6.20m, ReferenceNo = "PO-2026-007", Notes = "Stationery restock", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-8) }
+            };
+        }
+
+        private static List<Category> GetFallbackCategories()
+        {
+            return new List<Category>
+            {
+                new Category { CategoryID = 1, CategoryName = "Electronics", Description = "High-value consumer and enterprise electronic hardware and accessories", ProductCount = 2 },
+                new Category { CategoryID = 2, CategoryName = "Beverages", Description = "Bottled, canned, and packaged drinks for wholesale distribution", ProductCount = 2 },
+                new Category { CategoryID = 3, CategoryName = "Perishables", Description = "Fresh food items, dairy, and cold-chain inventory", ProductCount = 2 },
+                new Category { CategoryID = 4, CategoryName = "Office Supplies", Description = "Stationery, paper, printer consumables, and general desk utilities", ProductCount = 2 }
             };
         }
 

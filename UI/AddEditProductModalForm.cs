@@ -133,15 +133,25 @@ namespace Inventory_Management_System.UI
             card.Controls.Add(lblSup);
             cy += 24;
 
-            _cboCategory = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(16, cy), Size = new Size(210, 30), Font = Theme.FontBody };
-            _cboCategory.Items.AddRange(new object[] { "1 - Electronics", "2 - Beverages", "3 - Perishables", "4 - Office Supplies" });
-            _cboCategory.SelectedIndex = 0;
+            _cboCategory = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(16, cy), Size = new Size(168, 30), Font = Theme.FontBody };
+
+            var btnAddCat = new Button
+            {
+                Text = "+",
+                Location = new Point(190, cy - 1),
+                Size = new Size(36, 29),
+                Font = Theme.FontBodyBold,
+                Cursor = Cursors.Hand
+            };
+            Theme.ApplyFlatButton(btnAddCat, ColorTranslator.FromHtml("#EFF6FF"), Theme.Primary);
+            btnAddCat.Click += OnAddQuickCategoryClick;
 
             _cboSupplier = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(246, cy), Size = new Size(210, 30), Font = Theme.FontBody };
             _cboSupplier.Items.AddRange(new object[] { "1 - TechDistro Global Inc.", "2 - FreshGoods Supply Co." });
             _cboSupplier.SelectedIndex = 0;
 
             card.Controls.Add(_cboCategory);
+            card.Controls.Add(btnAddCat);
             card.Controls.Add(_cboSupplier);
             cy += 38;
 
@@ -255,6 +265,8 @@ namespace Inventory_Management_System.UI
 
         private void PopulateData()
         {
+            LoadCategories(_existingProduct?.CategoryID);
+
             if (_existingProduct == null)
             {
                 _txtSku.Text = $"PROD-{DateTime.Now:fff}";
@@ -262,22 +274,58 @@ namespace Inventory_Management_System.UI
                 return;
             }
 
-            _txtSku.Text = _existingProduct.SKU;
+            _txtSku.Text = _existingProduct.SKU ?? string.Empty;
             _txtBarcode.Text = _existingProduct.Barcode ?? string.Empty;
-            _txtName.Text = _existingProduct.ProductName;
+            _txtName.Text = _existingProduct.ProductName ?? string.Empty;
             _numCost.Value = _existingProduct.CostPrice;
             _numPrice.Value = _existingProduct.SellingPrice;
             _numStock.Value = _existingProduct.CurrentStock;
             _numReorder.Value = _existingProduct.ReorderLevel;
 
-            int catIndex = Math.Clamp(_existingProduct.CategoryID - 1, 0, _cboCategory.Items.Count - 1);
-            _cboCategory.SelectedIndex = catIndex;
-
-            int supIndex = Math.Clamp(_existingProduct.SupplierID - 1, 0, _cboSupplier.Items.Count - 1);
-            _cboSupplier.SelectedIndex = supIndex;
+            if (_cboSupplier.Items.Count > 0)
+            {
+                int supIndex = Math.Clamp(_existingProduct.SupplierID - 1, 0, _cboSupplier.Items.Count - 1);
+                _cboSupplier.SelectedIndex = supIndex;
+            }
 
             // Load existing product image or placeholder
             _picProductImage.Image = ImageService.Instance.LoadImage(_existingProduct.ImagePath);
+        }
+
+        private void LoadCategories(int? selectCategoryId = null)
+        {
+            _cboCategory.Items.Clear();
+            var categories = System.Linq.Enumerable.ToList(_inventoryService.GetAllCategories());
+            int selectedIdx = 0;
+
+            for (int i = 0; i < categories.Count; i++)
+            {
+                var cat = categories[i];
+                _cboCategory.Items.Add(cat);
+
+                if (selectCategoryId.HasValue && cat.CategoryID == selectCategoryId.Value)
+                {
+                    selectedIdx = i;
+                }
+                else if (!selectCategoryId.HasValue && _existingProduct != null && cat.CategoryID == _existingProduct.CategoryID)
+                {
+                    selectedIdx = i;
+                }
+            }
+
+            if (_cboCategory.Items.Count > 0)
+            {
+                _cboCategory.SelectedIndex = selectedIdx;
+            }
+        }
+
+        private void OnAddQuickCategoryClick(object? sender, EventArgs e)
+        {
+            using var modal = new AddEditCategoryModalForm(_inventoryService, null);
+            if (modal.ShowDialog(this) == DialogResult.OK && modal.SavedCategory != null)
+            {
+                LoadCategories(modal.SavedCategory.CategoryID);
+            }
         }
 
         private void OnBrowseImageClick(object? sender, EventArgs e)
@@ -340,10 +388,33 @@ namespace Inventory_Management_System.UI
                 return;
             }
 
-            int categoryId = _cboCategory.SelectedIndex + 1;
-            int supplierId = _cboSupplier.SelectedIndex + 1;
-            string categoryName = _cboCategory.SelectedItem?.ToString()?.Split('-')[1].Trim() ?? "General";
-            string supplierName = _cboSupplier.SelectedItem?.ToString()?.Split('-')[1].Trim() ?? "Vendor";
+            Category? selectedCategory = _cboCategory.SelectedItem as Category;
+            if (selectedCategory == null && _cboCategory.SelectedItem != null)
+            {
+                string rawText = _cboCategory.SelectedItem.ToString() ?? string.Empty;
+                selectedCategory = System.Linq.Enumerable.FirstOrDefault(
+                    _inventoryService.GetAllCategories(), 
+                    c => string.Equals(c.CategoryName, rawText, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (selectedCategory == null)
+            {
+                MessageBox.Show("Please select or add a product category.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _cboCategory.Focus();
+                return;
+            }
+
+            int categoryId = selectedCategory.CategoryID;
+            string categoryName = selectedCategory.CategoryName;
+
+            int supplierId = _cboSupplier.SelectedIndex >= 0 ? _cboSupplier.SelectedIndex + 1 : 1;
+            string supplierName = "Vendor";
+            if (_cboSupplier.SelectedItem != null)
+            {
+                string rawSup = _cboSupplier.SelectedItem.ToString() ?? string.Empty;
+                var parts = rawSup.Split('-');
+                supplierName = parts.Length > 1 ? parts[1].Trim() : rawSup.Trim();
+            }
 
             try
             {

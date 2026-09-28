@@ -39,11 +39,13 @@ namespace Inventory_Management_System.UI
         private Label _lblPreviewStockBadge = null!;
 
         private List<Product> _products = new();
+        private readonly User? _currentUser;
 
-        public StockTransactionModalForm(IInventoryService inventoryService, int? productId = null)
+        public StockTransactionModalForm(IInventoryService inventoryService, int? productId = null, User? currentUser = null)
         {
             _inventoryService = inventoryService ?? throw new ArgumentNullException(nameof(inventoryService));
             _initialProductId = productId;
+            _currentUser = currentUser;
 
             InitializeCustomComponents();
             LoadProductData();
@@ -51,7 +53,8 @@ namespace Inventory_Management_System.UI
 
         private void InitializeCustomComponents()
         {
-            Text = "Record Stock Movement & Verification";
+            bool isSales = _currentUser?.IsSalesStaff == true;
+            Text = isSales ? "Record Customer Sale & Dispatch Verification" : "Record Stock Movement & Verification";
             Size = new Size(780, 670);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -72,7 +75,7 @@ namespace Inventory_Management_System.UI
             // Header Title
             var lblHeader = new Label
             {
-                Text = "Record Stock Movement & Picking Verification",
+                Text = isSales ? "Record Customer Sale & Stock Dispatch" : "Record Stock Movement & Picking Verification",
                 Font = Theme.FontHeadingMd,
                 ForeColor = Theme.TextDark,
                 AutoSize = true,
@@ -83,7 +86,9 @@ namespace Inventory_Management_System.UI
 
             var lblSubtitle = new Label
             {
-                Text = "Logs immutable transaction audit trail, updates inventory on-hand balance, and verifies visual product match",
+                Text = isSales 
+                    ? "Deducts inventory on-hand balance for customer sales orders, logs operator audit trail, and confirms product match"
+                    : "Logs immutable transaction audit trail, updates inventory on-hand balance, and verifies visual product match",
                 Font = Theme.FontCaption,
                 ForeColor = Theme.TextMuted,
                 AutoSize = true,
@@ -164,8 +169,17 @@ namespace Inventory_Management_System.UI
                 Size = new Size(210, 30),
                 Font = Theme.FontBody
             };
-            _cboType.Items.AddRange(new object[] { "IN (Restock / Intake)", "OUT (Sale / Dispatch)", "ADJUSTMENT (Audit Count)" });
-            _cboType.SelectedIndex = 0;
+            if (_currentUser?.IsSalesStaff == true)
+            {
+                _cboType.Items.Add("OUT (Sale / Dispatch)");
+                _cboType.SelectedIndex = 0;
+                _cboType.Enabled = false; // Sales staff are restricted to customer sales dispatches
+            }
+            else
+            {
+                _cboType.Items.AddRange(new object[] { "IN (Restock / Intake)", "OUT (Sale / Dispatch)", "ADJUSTMENT (Audit Count)" });
+                _cboType.SelectedIndex = 0;
+            }
             _cboType.SelectedIndexChanged += OnProductOrTypeChanged;
             cardPanel.Controls.Add(_cboType);
 
@@ -362,7 +376,7 @@ namespace Inventory_Management_System.UI
 
             _btnSave = new Button
             {
-                Text = "Commit Movement",
+                Text = _currentUser?.IsSalesStaff == true ? "Commit Customer Sale" : "Commit Movement",
                 Size = new Size(180, 38),
                 Location = new Point(616, by)
             };
@@ -525,10 +539,51 @@ namespace Inventory_Management_System.UI
 
             try
             {
-                long txId = _inventoryService.RecordStockTransaction(prod.ProductID, type, qty, price, refNo, notes, 1);
+                int operatorId = _currentUser?.UserID > 0 ? _currentUser.UserID : 1;
+                long txId = _inventoryService.RecordStockTransaction(prod.ProductID, type, qty, price, refNo, notes, operatorId);
                 
-                MessageBox.Show($"Stock transaction #{txId} committed successfully!\nUpdated stock balance for '{prod.ProductName}'.",
-                    "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                int remainingStock = type == "OUT" 
+                    ? (prod.CurrentStock - qty) 
+                    : (type == "IN" ? prod.CurrentStock + qty : qty);
+
+                string alertNotice = string.Empty;
+                if (remainingStock <= 0)
+                {
+                    alertNotice = "\n\n🚨 ការជូនដំណឹង៖ ទំនិញនេះអស់ពីស្តុកហើយ! (បានផ្ញើ Alert ទៅ Telegram Bot)";
+                }
+                else if (remainingStock <= prod.ReorderLevel)
+                {
+                    alertNotice = $"\n\n⚠️ ការជូនដំណឹង៖ ទំនិញនៅសល់ត្រឹម {remainingStock} គ្រឿង [កម្រិតជិតអស់ពីស្តុក]! (បានផ្ញើ Alert ទៅ Telegram Bot)";
+                }
+
+                var confirmPrint = MessageBox.Show(
+                    $"Stock transaction #{txId} committed successfully!\nUpdated stock balance for '{prod.ProductName}'.{alertNotice}\n\nWould you like to preview and print the invoice / receipt voucher now?",
+                    "Transaction Committed",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (confirmPrint == DialogResult.Yes)
+                {
+                    var txObj = new StockTransaction
+                    {
+                        TransactionID = txId,
+                        ProductID = prod.ProductID,
+                        ProductName = prod.ProductName,
+                        SKU = prod.SKU,
+                        TransactionType = type,
+                        Quantity = qty,
+                        UnitPrice = price,
+                        ReferenceNo = string.IsNullOrWhiteSpace(refNo) ? $"TX-{txId:D6}" : refNo,
+                        Notes = notes,
+                        TransactionDate = DateTime.Now,
+                        CreatedBy = operatorId,
+                        CreatedByName = _currentUser?.FullName ?? _currentUser?.Username ?? "Operator"
+                    };
+
+                    var inv = Invoice.FromTransaction(txObj, prod, _currentUser?.Role);
+                    using var previewForm = new InvoicePreviewForm(inv);
+                    previewForm.ShowDialog(this);
+                }
 
                 DialogResult = DialogResult.OK;
                 Close();

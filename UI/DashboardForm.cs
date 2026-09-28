@@ -24,7 +24,25 @@ namespace Inventory_Management_System.UI
         private readonly IInventoryService _inventoryService;
         private readonly IAuthService _authService;
 
-        public User CurrentUser { get; }
+        private User _currentUser = new User
+        {
+            UserID = 1,
+            Username = "admin",
+            FullName = "System Administrator",
+            Role = "Admin"
+        };
+
+        public User CurrentUser
+        {
+            get => _currentUser;
+            private set => _currentUser = value ?? new User
+            {
+                UserID = 1,
+                Username = "admin",
+                FullName = "System Administrator",
+                Role = "Admin"
+            };
+        }
         public bool LoggedOut { get; private set; }
 
         // Structural UI Controls
@@ -43,6 +61,7 @@ namespace Inventory_Management_System.UI
         private Panel _panelProductsView = null!;
         private Panel _panelMovementsView = null!;
         private Panel _panelAuditsView = null!;
+        private Panel _panelCategoriesView = null!;
         private Panel _panelSettingsView = null!;
 
         // Sidebar Navigation Buttons
@@ -76,6 +95,12 @@ namespace Inventory_Management_System.UI
 
         // 5. Settings View Controls
         private Label _lblConnectionTestResult = null!;
+
+        // 6. Category Management View Controls
+        private DataGridView _gridCategories = null!;
+        private TextBox _txtCategorySearch = null!;
+        private List<Category> _allCachedCategories = new();
+        private Label _lblCategorySummary = null!;
 
         public DashboardForm(IInventoryService inventoryService, User? currentUser = null, IAuthService? authService = null)
         {
@@ -214,11 +239,22 @@ namespace Inventory_Management_System.UI
             };
 
             int btnY = 10;
-            navContainer.Controls.Add(CreateNavButton("Dashboard", "📊  Executive Dashboard", ref btnY));
-            navContainer.Controls.Add(CreateNavButton("Products", "📦  Product Catalog", ref btnY));
-            navContainer.Controls.Add(CreateNavButton("Movements", "🔄  Stock Movements", ref btnY));
-            navContainer.Controls.Add(CreateNavButton("Audits", "📑  Inventory Audits", ref btnY));
-            navContainer.Controls.Add(CreateNavButton("Settings", "⚙️  System Settings", ref btnY));
+            string dashText = CurrentUser.IsAdmin ? "📊  Executive Dashboard" : (CurrentUser.IsSalesStaff ? "📊  Sales & Orders" : "📊  Operations Dashboard");
+            string prodText = CurrentUser.IsAdmin ? "📦  Product Catalog" : (CurrentUser.IsSalesStaff ? "📦  Product Catalog (Sales)" : "📦  Product Catalog (View)");
+            string moveText = CurrentUser.IsSalesStaff ? "🛒  Customer Sales & Orders" : "🔄  Stock Movements";
+
+            navContainer.Controls.Add(CreateNavButton("Dashboard", dashText, ref btnY));
+            navContainer.Controls.Add(CreateNavButton("Products", prodText, ref btnY));
+            navContainer.Controls.Add(CreateNavButton("Movements", moveText, ref btnY));
+            if (!CurrentUser.IsSalesStaff)
+            {
+                navContainer.Controls.Add(CreateNavButton("Audits", "📑  Inventory Audits", ref btnY));
+            }
+            if (CurrentUser.IsAdmin)
+            {
+                navContainer.Controls.Add(CreateNavButton("Categories", "🏷️  Categories", ref btnY));
+                navContainer.Controls.Add(CreateNavButton("Settings", "⚙️  System Settings", ref btnY));
+            }
 
             // Bottom Status Card
             var bottomCard = new Panel
@@ -238,10 +274,14 @@ namespace Inventory_Management_System.UI
                 AutoSize = true
             };
 
+            Color roleColor = CurrentUser.IsAdmin 
+                ? Theme.Primary 
+                : (CurrentUser.IsSalesStaff ? Theme.Success : Theme.Warning);
+
             var lblRole = new Label
             {
                 Text = $"Role: {CurrentUser.Role} • {CurrentUser.Username}",
-                ForeColor = Theme.Primary,
+                ForeColor = roleColor,
                 Font = Theme.FontCaption,
                 Location = new Point(14, 34),
                 AutoSize = true
@@ -350,47 +390,102 @@ namespace Inventory_Management_System.UI
             _panelProductsView.Visible = false;
             _panelMovementsView.Visible = false;
             _panelAuditsView.Visible = false;
+            _panelCategoriesView.Visible = false;
             _panelSettingsView.Visible = false;
 
             switch (key.ToLowerInvariant())
             {
                 case "dashboard":
-                    _lblHeaderTitle.Text = "Inventory Intelligence & Executive Dashboard";
-                    _lblHeaderSubtitle.Text = "Real-time stock analytics, turnover telemetry & restock triggers";
+                    if (CurrentUser.IsAdmin)
+                    {
+                        _lblHeaderTitle.Text = "Inventory Intelligence & Executive Dashboard";
+                        _lblHeaderSubtitle.Text = "Real-time stock analytics, turnover telemetry & restock triggers";
+                    }
+                    else if (CurrentUser.IsSalesStaff)
+                    {
+                        _lblHeaderTitle.Text = "Sales Operations & Outflow Dashboard";
+                        _lblHeaderSubtitle.Text = "Real-time catalog availability, customer sales dispatch & demand telemetry";
+                    }
+                    else
+                    {
+                        _lblHeaderTitle.Text = "Warehouse Operations Dashboard";
+                        _lblHeaderSubtitle.Text = "Real-time inventory levels, low stock alerts & restocking workflows";
+                    }
                     _panelDashboardView.Visible = true;
                     _panelDashboardView.BringToFront();
                     LoadDashboardData();
                     break;
 
                 case "products":
-                    _lblHeaderTitle.Text = "Product Master Catalog";
-                    _lblHeaderSubtitle.Text = "Maintain enterprise inventory SKUs, categories, suppliers & pricing";
+                    if (CurrentUser.IsAdmin)
+                    {
+                        _lblHeaderTitle.Text = "Product Master Catalog";
+                        _lblHeaderSubtitle.Text = "Maintain enterprise inventory SKUs, categories, suppliers & pricing";
+                    }
+                    else if (CurrentUser.IsSalesStaff)
+                    {
+                        _lblHeaderTitle.Text = "Product Sales Catalog & Live Stock";
+                        _lblHeaderSubtitle.Text = "Browse customer selling prices, product specifications, and live on-hand quantities";
+                    }
+                    else
+                    {
+                        _lblHeaderTitle.Text = "Product Master Catalog (Read-Only)";
+                        _lblHeaderSubtitle.Text = "Browse inventory SKUs, barcodes, and current warehouse stock counts";
+                    }
                     _panelProductsView.Visible = true;
                     _panelProductsView.BringToFront();
                     LoadProductsData();
                     break;
 
                 case "movements":
-                    _lblHeaderTitle.Text = "Stock Movement Ledger & Audit Trail";
-                    _lblHeaderSubtitle.Text = "Complete historical ledger of Stock In, Stock Out & Physical Count Adjustments";
+                    _lblHeaderTitle.Text = CurrentUser.IsSalesStaff ? "Customer Sales & Dispatch Ledger" : "Stock Movement Ledger & Audit Trail";
+                    _lblHeaderSubtitle.Text = CurrentUser.IsSalesStaff 
+                        ? "Immutable record of customer sales orders, dispatched quantities, and operator audit trail"
+                        : "Complete historical ledger of Stock In, Stock Out & Physical Count Adjustments";
                     _panelMovementsView.Visible = true;
                     _panelMovementsView.BringToFront();
                     LoadMovementsData();
                     break;
 
                 case "audits":
-                    _lblHeaderTitle.Text = "Inventory Health & Valuation Audits";
-                    _lblHeaderSubtitle.Text = "Capital allocation analysis, physical count reconciliation & variance monitoring";
+                    if (CurrentUser.IsSalesStaff)
+                    {
+                        MessageBox.Show("Access Denied: Physical inventory audits are restricted to Warehouse and Administrative staff.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        SwitchView("Dashboard");
+                        return;
+                    }
+                    _lblHeaderTitle.Text = "Inventory Health & Verification Audits";
+                    _lblHeaderSubtitle.Text = "Physical count reconciliation & stock invariant monitoring";
                     _panelAuditsView.Visible = true;
                     _panelAuditsView.BringToFront();
                     LoadAuditData();
                     break;
 
                 case "settings":
+                    if (!CurrentUser.IsAdmin)
+                    {
+                        MessageBox.Show("Access Denied: System Settings is restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        SwitchView("Dashboard");
+                        return;
+                    }
                     _lblHeaderTitle.Text = "System Configuration & Architecture";
                     _lblHeaderSubtitle.Text = "Database connection status, security profiles & 3-Tier diagnostic telemetry";
                     _panelSettingsView.Visible = true;
                     _panelSettingsView.BringToFront();
+                    break;
+
+                case "categories":
+                    if (!CurrentUser.IsAdmin)
+                    {
+                        MessageBox.Show("Access Denied: Category Management is restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        SwitchView("Dashboard");
+                        return;
+                    }
+                    _lblHeaderTitle.Text = "Category Management & Taxonomy";
+                    _lblHeaderSubtitle.Text = "Create, update, organize, and manage product inventory categories";
+                    _panelCategoriesView.Visible = true;
+                    _panelCategoriesView.BringToFront();
+                    LoadCategoriesData();
                     break;
             }
         }
@@ -501,11 +596,12 @@ namespace Inventory_Management_System.UI
                 Padding = new Padding(0)
             };
 
-            // Build all 5 sub-views
+            // Build all sub-views
             BuildDashboardView();
             BuildProductsView();
             BuildMovementsView();
             BuildAuditsView();
+            BuildCategoriesView();
             BuildSettingsView();
         }
 
@@ -572,7 +668,7 @@ namespace Inventory_Management_System.UI
 
             var chartCard2 = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Margin = new Padding(8, 0, 0, 0), Padding = new Padding(16) };
             chartCard2.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, chartCard2.Width - 1, chartCard2.Height - 1); };
-            var lblC2 = new Label { Text = "Inventory Valuation by Category", Font = Theme.FontHeadingSm, ForeColor = Theme.TextDark, Dock = DockStyle.Top, Height = 26 };
+            var lblC2 = new Label { Text = CurrentUser.IsAdmin ? "Inventory Valuation by Category" : "Category Stock Distribution (Units)", Font = Theme.FontHeadingSm, ForeColor = Theme.TextDark, Dock = DockStyle.Top, Height = 26 };
             _chartValuation = new PieChart { Dock = DockStyle.Fill };
             chartCard2.Controls.Add(_chartValuation);
             chartCard2.Controls.Add(lblC2);
@@ -596,10 +692,56 @@ namespace Inventory_Management_System.UI
 
             var restockHeader = new Panel { Dock = DockStyle.Top, Height = 44 };
             var lblGridTitle = new Label { Text = "⚠️  Urgent Restock Watchlist (Current Stock ≤ Reorder Level)", Font = Theme.FontHeadingSm, ForeColor = Theme.DangerDark, Location = new Point(0, 8), AutoSize = true };
+
+            var btnTelegramAlert = new Button
+            {
+                Text = "📲  ផ្ញើ Alert ទៅ Telegram",
+                Size = new Size(190, 34),
+                MinimumSize = new Size(180, 34),
+                AutoSize = true,
+                Dock = DockStyle.Right,
+                Margin = new Padding(0, 4, 8, 4)
+            };
+            Theme.ApplyFlatButton(btnTelegramAlert, Theme.Secondary, Color.White);
+            btnTelegramAlert.Click += async (s, e) =>
+            {
+                btnTelegramAlert.Enabled = false;
+                btnTelegramAlert.Text = "⏳ កំពុងផ្ញើ...";
+                try
+                {
+                    var lowStockItems = _inventoryService.GetUrgentRestockList().ToList();
+                    if (lowStockItems.Count == 0)
+                    {
+                        MessageBox.Show("បច្ចុប្បន្នមិនមានទំនិញណាមួយជិតអស់ពីស្តុកនោះទេ! (No low stock items detected).", 
+                            "Telegram Alert", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
+                    bool ok = await _inventoryService.TelegramService.SendUrgentRestockSummaryAsync(lowStockItems);
+                    if (ok)
+                    {
+                        MessageBox.Show($"បានផ្ញើរបាយការណ៍ទំនិញជិតអស់ស្តុកចំនួន {lowStockItems.Count} មុខ ទៅកាន់ Telegram Bot រួចរាល់ដោយជោគជ័យ!", 
+                            "ជោគជ័យ (Success)", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("ការផ្ញើទៅកាន់ Telegram បានបរាជ័យ។ សូមពិនិត្យមើល Bot Token និង Chat ID នៅក្នុង System Settings។", 
+                            "បរាជ័យ (Failed)", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+                finally
+                {
+                    btnTelegramAlert.Enabled = true;
+                    btnTelegramAlert.Text = "📲  ផ្ញើ Alert ទៅ Telegram";
+                }
+            };
+
             var btnGridRestock = new Button
             {
                 Text = "Restock Selected Item",
-                Size = new Size(160, 32),
+                Size = new Size(185, 34),
+                MinimumSize = new Size(175, 34),
+                AutoSize = true,
                 Dock = DockStyle.Right,
                 Margin = new Padding(0, 4, 0, 4)
             };
@@ -607,6 +749,7 @@ namespace Inventory_Management_System.UI
             btnGridRestock.Click += (s, e) => RestockFromGrid(_gridUrgentStock);
 
             restockHeader.Controls.Add(btnGridRestock);
+            restockHeader.Controls.Add(btnTelegramAlert);
             restockHeader.Controls.Add(lblGridTitle);
 
             _gridUrgentStock = new DataGridView { Dock = DockStyle.Fill };
@@ -649,9 +792,9 @@ namespace Inventory_Management_System.UI
             var actionPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 56,
+                Height = 60,
                 BackColor = Color.White,
-                Padding = new Padding(14, 10, 14, 10)
+                Padding = new Padding(14, 11, 14, 11)
             };
             actionPanel.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, actionPanel.Width - 1, actionPanel.Height - 1); };
 
@@ -670,7 +813,7 @@ namespace Inventory_Management_System.UI
 
             var lblCat = new Label { Text = "Category:", Font = Theme.FontBodyBold, AutoSize = true, Margin = new Padding(0, 8, 6, 0) };
             _cboCategoryFilter = new ComboBox { Size = new Size(160, 30), DropDownStyle = ComboBoxStyle.DropDownList, Font = Theme.FontBody, Margin = new Padding(0, 4, 0, 0) };
-            _cboCategoryFilter.Items.AddRange(new object[] { "All Categories", "Electronics", "Beverages", "Perishables", "Office Supplies" });
+            _cboCategoryFilter.Items.Add("All Categories");
             _cboCategoryFilter.SelectedIndex = 0;
             _cboCategoryFilter.SelectedIndexChanged += (s, e) => FilterProducts();
 
@@ -688,26 +831,81 @@ namespace Inventory_Management_System.UI
                 BackColor = Color.Transparent
             };
 
-            var btnAdd = new Button { Text = "+  Add Product", Size = new Size(125, 34), Margin = new Padding(4, 0, 4, 0) };
+            var btnAdd = new Button
+            {
+                Text = "+  Add Product",
+                Size = new Size(140, 36),
+                MinimumSize = new Size(130, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
             Theme.ApplyFlatButton(btnAdd, Theme.Primary, Color.White);
             btnAdd.Click += OnAddProductClick;
 
-            var btnEdit = new Button { Text = "✏️  Edit Product", Size = new Size(125, 34), Margin = new Padding(4, 0, 4, 0) };
+            var btnEdit = new Button
+            {
+                Text = "✏️  Edit Product",
+                Size = new Size(140, 36),
+                MinimumSize = new Size(130, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
             Theme.ApplyFlatButton(btnEdit, ColorTranslator.FromHtml("#F1F5F9"), Theme.TextDark);
             btnEdit.Click += OnEditProductClick;
 
-            var btnDelete = new Button { Text = "🗑️  Delete", Size = new Size(95, 34), Margin = new Padding(4, 0, 4, 0) };
+            var btnDelete = new Button
+            {
+                Text = "🗑️  Delete",
+                Size = new Size(110, 36),
+                MinimumSize = new Size(100, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
             Theme.ApplyFlatButton(btnDelete, Theme.DangerLight, Theme.DangerDark);
             btnDelete.Click += OnDeleteProductClick;
 
-            var btnRestock = new Button { Text = "⚡  Restock Item", Size = new Size(130, 34), Margin = new Padding(4, 0, 0, 0) };
-            Theme.ApplyFlatButton(btnRestock, Theme.Warning, Color.White);
-            btnRestock.Click += (s, e) => RestockFromGrid(_gridAllProducts);
+            var btnAction = new Button
+            {
+                Text = CurrentUser.IsSalesStaff ? "🛒  Sell Selected Item" : "⚡  Restock Item",
+                Size = new Size(160, 36),
+                MinimumSize = new Size(140, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 0, 1)
+            };
+            Theme.ApplyFlatButton(btnAction, CurrentUser.IsSalesStaff ? Theme.Success : Theme.Warning, Color.White);
+            btnAction.Click += (s, e) => RestockFromGrid(_gridAllProducts);
 
-            actionButtonsFlow.Controls.Add(btnAdd);
-            actionButtonsFlow.Controls.Add(btnEdit);
-            actionButtonsFlow.Controls.Add(btnDelete);
-            actionButtonsFlow.Controls.Add(btnRestock);
+            if (CurrentUser.IsAdmin)
+            {
+                actionButtonsFlow.Controls.Add(btnAdd);
+                actionButtonsFlow.Controls.Add(btnEdit);
+                actionButtonsFlow.Controls.Add(btnDelete);
+
+                var btnCategories = new Button
+                {
+                    Text = "🏷️  Categories",
+                    Size = new Size(130, 36),
+                    MinimumSize = new Size(120, 36),
+                    AutoSize = true,
+                    Margin = new Padding(4, 1, 4, 1)
+                };
+                Theme.ApplyFlatButton(btnCategories, ColorTranslator.FromHtml("#EFF6FF"), Theme.Primary);
+                btnCategories.Click += (s, e) => SwitchView("Categories");
+                actionButtonsFlow.Controls.Add(btnCategories);
+            }
+            else
+            {
+                var lblStaffBadge = new Label
+                {
+                    Text = "🔒 Catalog Mod: Admin Only",
+                    Font = Theme.FontCaption,
+                    ForeColor = Theme.TextMuted,
+                    AutoSize = true,
+                    Margin = new Padding(0, 10, 8, 0)
+                };
+                actionButtonsFlow.Controls.Add(lblStaffBadge);
+            }
+            actionButtonsFlow.Controls.Add(btnAction);
 
             actionPanel.Controls.Add(actionButtonsFlow);
             actionPanel.Controls.Add(searchFilterFlow);
@@ -727,8 +925,30 @@ namespace Inventory_Management_System.UI
             Theme.ApplyModernGrid(_gridAllProducts);
             _gridAllProducts.RowTemplate.Height = 48;
             _gridAllProducts.CellFormatting += OnGridCellFormatting;
-            _gridAllProducts.CellDoubleClick += (s, e) => OnEditProductClick(s, e);
+            _gridAllProducts.CellDoubleClick += (s, e) =>
+            {
+                if (CurrentUser.IsAdmin)
+                    OnEditProductClick(s, e);
+                else
+                    RestockFromGrid(_gridAllProducts);
+            };
             _gridAllProducts.DataBindingComplete += (s, e) => SafeConfigureImageGridColumns(_gridAllProducts, "ProductName", 220);
+            _gridAllProducts.SelectionChanged += (s, e) =>
+            {
+                if (CurrentUser.IsAdmin)
+                {
+                    int count = _gridAllProducts.SelectedRows.Count;
+                    btnDelete.Text = count > 1 ? $"🗑️  Delete ({count})" : "🗑️  Delete";
+                }
+            };
+            _gridAllProducts.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Delete && CurrentUser.IsAdmin)
+                {
+                    OnDeleteProductClick(s, e);
+                    e.Handled = true;
+                }
+            };
 
             gridCard.Controls.Add(_gridAllProducts);
 
@@ -756,9 +976,9 @@ namespace Inventory_Management_System.UI
             var actionPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 56,
+                Height = 60,
                 BackColor = Color.White,
-                Padding = new Padding(14, 10, 14, 10)
+                Padding = new Padding(14, 11, 14, 11)
             };
             actionPanel.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, actionPanel.Width - 1, actionPanel.Height - 1); };
 
@@ -776,9 +996,18 @@ namespace Inventory_Management_System.UI
             _txtMovementSearch.TextChanged += (s, e) => FilterMovements();
 
             var lblType = new Label { Text = "Type:", Font = Theme.FontBodyBold, AutoSize = true, Margin = new Padding(0, 8, 6, 0) };
-            _cboMovementTypeFilter = new ComboBox { Size = new Size(140, 30), DropDownStyle = ComboBoxStyle.DropDownList, Font = Theme.FontBody, Margin = new Padding(0, 4, 0, 0) };
-            _cboMovementTypeFilter.Items.AddRange(new object[] { "All Movements", "IN (Intake)", "OUT (Dispatch)", "ADJUSTMENT" });
-            _cboMovementTypeFilter.SelectedIndex = 0;
+            _cboMovementTypeFilter = new ComboBox { Size = new Size(160, 30), DropDownStyle = ComboBoxStyle.DropDownList, Font = Theme.FontBody, Margin = new Padding(0, 4, 0, 0) };
+            if (CurrentUser.IsSalesStaff)
+            {
+                _cboMovementTypeFilter.Items.AddRange(new object[] { "OUT (Sales Dispatches)" });
+                _cboMovementTypeFilter.SelectedIndex = 0;
+                _cboMovementTypeFilter.Enabled = false;
+            }
+            else
+            {
+                _cboMovementTypeFilter.Items.AddRange(new object[] { "All Movements", "IN (Intake)", "OUT (Dispatch)", "ADJUSTMENT" });
+                _cboMovementTypeFilter.SelectedIndex = 0;
+            }
             _cboMovementTypeFilter.SelectedIndexChanged += (s, e) => FilterMovements();
 
             searchFilterFlow.Controls.Add(lblSearch);
@@ -786,16 +1015,31 @@ namespace Inventory_Management_System.UI
             searchFilterFlow.Controls.Add(lblType);
             searchFilterFlow.Controls.Add(_cboMovementTypeFilter);
 
-            var btnNewTx = new Button
+            var btnPrintInvoice = new Button
             {
-                Text = "+  Record Stock Movement",
-                Size = new Size(190, 34),
+                Text = "🧾  Print Invoice / Receipt",
+                Size = new Size(190, 36),
+                MinimumSize = new Size(180, 36),
+                AutoSize = true,
                 Dock = DockStyle.Right
             };
-            Theme.ApplyFlatButton(btnNewTx, Theme.Primary, Color.White);
+            Theme.ApplyFlatButton(btnPrintInvoice, Theme.CardBorder, Theme.TextDark);
+            btnPrintInvoice.Click += (s, e) => PrintSelectedMovementInvoice();
+
+            var btnNewTx = new Button
+            {
+                Text = CurrentUser.IsSalesStaff ? "🛒  Record Customer Sale" : "+  Record Stock Movement",
+                Size = new Size(220, 36),
+                MinimumSize = new Size(210, 36),
+                AutoSize = true,
+                Dock = DockStyle.Right
+            };
+            Theme.ApplyFlatButton(btnNewTx, CurrentUser.IsSalesStaff ? Theme.Success : Theme.Primary, Color.White);
             btnNewTx.Click += (s, e) => OpenRestockModal(null);
 
             actionPanel.Controls.Add(btnNewTx);
+            actionPanel.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8, BackColor = Color.Transparent });
+            actionPanel.Controls.Add(btnPrintInvoice);
             actionPanel.Controls.Add(searchFilterFlow);
 
             var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
@@ -812,6 +1056,13 @@ namespace Inventory_Management_System.UI
             Theme.ApplyModernGrid(_gridMovements);
             _gridMovements.RowTemplate.Height = 48;
             _gridMovements.CellFormatting += OnMovementsCellFormatting;
+            _gridMovements.CellDoubleClick += (s, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    PrintSelectedMovementInvoice();
+                }
+            };
             _gridMovements.DataBindingComplete += (s, e) => SafeConfigureImageGridColumns(_gridMovements, "Product", 200);
 
             gridCard.Controls.Add(_gridMovements);
@@ -904,7 +1155,141 @@ namespace Inventory_Management_System.UI
 
         #endregion
 
-        #region View 5: System Settings View
+        #region View 5: Category Management View
+
+        private void BuildCategoriesView()
+        {
+            _panelCategoriesView = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Theme.CanvasBg,
+                Padding = new Padding(24, 20, 24, 24)
+            };
+
+            // Action & Filter Bar
+            var actionPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 60,
+                BackColor = Color.White,
+                Padding = new Padding(14, 11, 14, 11)
+            };
+            actionPanel.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, actionPanel.Width - 1, actionPanel.Height - 1); };
+
+            var searchFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Left,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent
+            };
+
+            var lblSearch = new Label { Text = "Search:", Font = Theme.FontBodyBold, AutoSize = true, Margin = new Padding(0, 8, 6, 0) };
+            _txtCategorySearch = new TextBox { Size = new Size(240, 30), Font = Theme.FontBody, PlaceholderText = "Search by category name...", Margin = new Padding(0, 4, 16, 0) };
+            _txtCategorySearch.TextChanged += (s, e) => FilterCategories();
+
+            _lblCategorySummary = new Label
+            {
+                Text = "Loading categories...",
+                Font = Theme.FontCaption,
+                ForeColor = Theme.TextMuted,
+                AutoSize = true,
+                Margin = new Padding(0, 10, 0, 0)
+            };
+
+            searchFlow.Controls.Add(lblSearch);
+            searchFlow.Controls.Add(_txtCategorySearch);
+            searchFlow.Controls.Add(_lblCategorySummary);
+
+            var actionButtonsFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent
+            };
+
+            var btnAdd = new Button
+            {
+                Text = "+  Add Category",
+                Size = new Size(150, 36),
+                MinimumSize = new Size(140, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
+            Theme.ApplyFlatButton(btnAdd, Theme.Primary, Color.White);
+            btnAdd.Click += OnAddCategoryClick;
+
+            var btnEdit = new Button
+            {
+                Text = "✏️  Edit Category",
+                Size = new Size(150, 36),
+                MinimumSize = new Size(140, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
+            Theme.ApplyFlatButton(btnEdit, ColorTranslator.FromHtml("#F1F5F9"), Theme.TextDark);
+            btnEdit.Click += OnEditCategoryClick;
+
+            var btnDelete = new Button
+            {
+                Text = "🗑️  Delete",
+                Size = new Size(110, 36),
+                MinimumSize = new Size(100, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
+            Theme.ApplyFlatButton(btnDelete, Theme.DangerLight, Theme.DangerDark);
+            btnDelete.Click += OnDeleteCategoryClick;
+
+            var btnRefresh = new Button
+            {
+                Text = "🔄  Refresh",
+                Size = new Size(110, 36),
+                MinimumSize = new Size(100, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 0, 1)
+            };
+            Theme.ApplyFlatButton(btnRefresh, ColorTranslator.FromHtml("#F1F5F9"), Theme.TextDark);
+            btnRefresh.Click += (s, e) => LoadCategoriesData();
+
+            actionButtonsFlow.Controls.Add(btnAdd);
+            actionButtonsFlow.Controls.Add(btnEdit);
+            actionButtonsFlow.Controls.Add(btnDelete);
+            actionButtonsFlow.Controls.Add(btnRefresh);
+
+            actionPanel.Controls.Add(actionButtonsFlow);
+            actionPanel.Controls.Add(searchFlow);
+
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = Color.Transparent };
+
+            // Grid Card Panel
+            var gridCard = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Padding = new Padding(1)
+            };
+            gridCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, gridCard.Width - 1, gridCard.Height - 1); };
+
+            _gridCategories = new DataGridView { Dock = DockStyle.Fill };
+            Theme.ApplyModernGrid(_gridCategories);
+            _gridCategories.DoubleClick += OnEditCategoryClick;
+
+            gridCard.Controls.Add(_gridCategories);
+
+            _panelCategoriesView.Controls.Add(gridCard);
+            _panelCategoriesView.Controls.Add(spacer);
+            _panelCategoriesView.Controls.Add(actionPanel);
+
+            _contentContainer.Controls.Add(_panelCategoriesView);
+        }
+
+        #endregion
+
+        #region View 6: System Settings View
 
         private void BuildSettingsView()
         {
@@ -985,7 +1370,142 @@ namespace Inventory_Management_System.UI
 
             var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
 
-            // Card 2: OOAD Architecture Specifications
+            // Card 2: Telegram Bot Notification Settings
+            var telegramCard = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 310,
+                BackColor = Color.White,
+                Padding = new Padding(20)
+            };
+            telegramCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, telegramCard.Width - 1, telegramCard.Height - 1); };
+
+            var lblTgTitle = new Label { Text = "📢  Telegram Bot Low Stock Alerts (ការជូនដំណឹងតាម Telegram)", Font = Theme.FontHeadingSm, ForeColor = Theme.TextDark, Location = new Point(16, 16), AutoSize = true };
+            var lblTgSub = new Label { Text = "ផ្ញើសារជាភាសាខ្មែរទៅកាន់ Telegram Bot ដោយស្វ័យប្រវត្តិនូវរាល់ពេលទំនិញធ្លាក់ចុះដល់កម្រិតជិតអស់ពីស្តុក (Current Stock ≤ Reorder Level) ឬអស់ពីស្តុក", Font = Theme.FontCaption, ForeColor = Theme.TextMuted, Location = new Point(16, 40), AutoSize = true };
+
+            var lblTgToken = new Label { Text = "Bot Token:", Font = Theme.FontCaptionBold, ForeColor = Theme.TextDark, Location = new Point(16, 70), AutoSize = true };
+            var txtTgToken = new TextBox
+            {
+                Text = _inventoryService.TelegramService.BotToken,
+                Location = new Point(16, 92),
+                Size = new Size(460, 30),
+                Font = Theme.FontBody
+            };
+
+            var lblTgChatId = new Label { Text = "Chat ID / Group ID:", Font = Theme.FontCaptionBold, ForeColor = Theme.TextDark, Location = new Point(490, 70), AutoSize = true };
+            var txtTgChatId = new TextBox
+            {
+                Text = _inventoryService.TelegramService.ChatId,
+                Location = new Point(490, 92),
+                Size = new Size(240, 30),
+                Font = Theme.FontBody
+            };
+
+            var chkTgEnabled = new CheckBox
+            {
+                Text = "បើកដំណើរការការជូនដំណឹងស្វ័យប្រវត្តិ (Enable Real-Time Alerts)",
+                Checked = _inventoryService.TelegramService.IsEnabled,
+                Location = new Point(16, 132),
+                AutoSize = true,
+                Font = Theme.FontBodyBold,
+                ForeColor = Theme.TextDark
+            };
+
+            var btnDetectChat = new Button { Text = "🔍  Detect Chat ID", Size = new Size(160, 34), Location = new Point(16, 170) };
+            Theme.ApplyFlatButton(btnDetectChat, Theme.Secondary, Color.White);
+
+            var btnTestTg = new Button { Text = "📨  Send Test Alert (Khmer)", Size = new Size(205, 34), Location = new Point(186, 170) };
+            Theme.ApplyFlatButton(btnTestTg, Theme.Primary, Color.White);
+
+            var btnSaveTg = new Button { Text = "💾  Save Telegram Settings", Size = new Size(195, 34), Location = new Point(401, 170) };
+            Theme.ApplyFlatButton(btnSaveTg, Theme.Success, Color.White);
+
+            var lblTgStatus = new Label
+            {
+                Text = "ស្ថានភាព៖ រួចរាល់សម្រាប់ការជូនដំណឹង (Ready)",
+                Font = Theme.FontCaption,
+                ForeColor = Theme.TextMuted,
+                Location = new Point(16, 215),
+                AutoSize = true
+            };
+
+            btnDetectChat.Click += async (s, e) =>
+            {
+                btnDetectChat.Enabled = false;
+                lblTgStatus.Text = "កំពុងស្វែងរក Chat ID ពី Telegram Updates...";
+                lblTgStatus.ForeColor = Theme.Primary;
+
+                var result = await _inventoryService.TelegramService.DetectLatestChatIdAsync();
+                btnDetectChat.Enabled = true;
+
+                if (result.Success && !string.IsNullOrWhiteSpace(result.DetectedChatId))
+                {
+                    txtTgChatId.Text = result.DetectedChatId;
+                    lblTgStatus.Text = $"● រកឃើញ Chat ID ដោយជោគជ័យ: {result.DetectedChatId} ({result.SenderName})";
+                    lblTgStatus.ForeColor = Theme.SuccessDark;
+                }
+                else
+                {
+                    lblTgStatus.Text = $"● រកមិនឃើញ Chat ID: {result.Error}";
+                    lblTgStatus.ForeColor = Theme.DangerDark;
+                }
+            };
+
+            btnTestTg.Click += async (s, e) =>
+            {
+                btnTestTg.Enabled = false;
+                lblTgStatus.Text = "កំពុងផ្ញើសារសាកល្បងជាភាសាខ្មែរទៅកាន់ Telegram...";
+                lblTgStatus.ForeColor = Theme.Primary;
+
+                _inventoryService.TelegramService.UpdateConfig(txtTgToken.Text.Trim(), txtTgChatId.Text.Trim(), chkTgEnabled.Checked);
+                bool ok = await _inventoryService.TelegramService.SendTestNotificationAsync();
+                btnTestTg.Enabled = true;
+
+                if (ok)
+                {
+                    lblTgStatus.Text = "● បានផ្ញើសារសាកល្បងទៅកាន់ Telegram ទទួលបានជោគជ័យ!";
+                    lblTgStatus.ForeColor = Theme.SuccessDark;
+                }
+                else
+                {
+                    lblTgStatus.Text = "● ការផ្ញើសារបរាជ័យ! សូមពិនិត្យមើល Token និង Chat ID។";
+                    lblTgStatus.ForeColor = Theme.DangerDark;
+                }
+            };
+
+            btnSaveTg.Click += (s, e) =>
+            {
+                _inventoryService.TelegramService.UpdateConfig(txtTgToken.Text.Trim(), txtTgChatId.Text.Trim(), chkTgEnabled.Checked);
+                lblTgStatus.Text = "● បានរក្សាទុកការកំណត់ Telegram ដោយជោគជ័យ!";
+                lblTgStatus.ForeColor = Theme.SuccessDark;
+                MessageBox.Show("ការកំណត់ Telegram Bot ត្រូវបានរក្សាទុកដោយជោគជ័យ!", "រក្សាទុកជោគជ័យ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            };
+
+            var lblTgTip = new Label
+            {
+                Text = "💡 ព័ត៌មានជំនួយ៖ ដើម្បីទទួលបាន Chat ID សូមបើក Telegram រួចស្វែងរក @InventoryAlert24Bot ហើយចុច Start ឬផ្ញើសារ 'hi' រួចចុច 'Detect Chat ID'។",
+                Font = Theme.FontCaption,
+                ForeColor = Theme.TextMuted,
+                Location = new Point(16, 245),
+                AutoSize = true
+            };
+
+            telegramCard.Controls.Add(lblTgTitle);
+            telegramCard.Controls.Add(lblTgSub);
+            telegramCard.Controls.Add(lblTgToken);
+            telegramCard.Controls.Add(txtTgToken);
+            telegramCard.Controls.Add(lblTgChatId);
+            telegramCard.Controls.Add(txtTgChatId);
+            telegramCard.Controls.Add(chkTgEnabled);
+            telegramCard.Controls.Add(btnDetectChat);
+            telegramCard.Controls.Add(btnTestTg);
+            telegramCard.Controls.Add(btnSaveTg);
+            telegramCard.Controls.Add(lblTgStatus);
+            telegramCard.Controls.Add(lblTgTip);
+
+            var spacerTg = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
+
+            // Card 3: OOAD Architecture Specifications
             var ooadCard = new Panel
             {
                 Dock = DockStyle.Top,
@@ -1022,9 +1542,11 @@ namespace Inventory_Management_System.UI
             ooadCard.Controls.Add(lblOoadDesc);
             ooadCard.Controls.Add(lblProfile);
 
-            // Adding: ooadCard -> spacer -> dbCard
-            // Results in reverse order layout: dbCard (at top) -> spacer -> ooadCard (below)
+            // Adding: ooadCard -> spacerTg -> telegramCard -> spacer -> dbCard
+            // Results in top-to-bottom layout: dbCard -> spacer -> telegramCard -> spacerTg -> ooadCard
             _panelSettingsView.Controls.Add(ooadCard);
+            _panelSettingsView.Controls.Add(spacerTg);
+            _panelSettingsView.Controls.Add(telegramCard);
             _panelSettingsView.Controls.Add(spacer);
             _panelSettingsView.Controls.Add(dbCard);
 
@@ -1040,6 +1562,7 @@ namespace Inventory_Management_System.UI
         private void LoadAllData()
         {
             LoadDashboardData();
+            LoadCategoriesData();
             LoadProductsData();
             LoadMovementsData();
             LoadAuditData();
@@ -1051,12 +1574,29 @@ namespace Inventory_Management_System.UI
             {
                 var metrics = _inventoryService.GetDashboardSummary();
 
-                _cardTotalUnits.SetData("Total Inventory", $"{metrics.TotalInventoryCount:N0} Units", $"{metrics.TotalProductCount} Total Products", Theme.Primary, "📦");
-                _cardTotalValuation.SetData("Asset Valuation", $"${metrics.TotalAssetValuation:N2}", "Calculated at Cost Basis", Theme.Success, "💰");
-                _cardLowStock.SetData("Restock Alerts", $"{metrics.LowStockProductCount} Items", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
-
-                string prefix = metrics.TodayNetMovement >= 0 ? "+" : "";
-                _cardNetMovement.SetData("Today's Movement", $"{prefix}{metrics.TodayNetMovement} Units", $"In: +{metrics.TodayStockIn} | Out: -{metrics.TodayStockOut}", Theme.Primary, "🔄");
+                if (CurrentUser.IsAdmin)
+                {
+                    _cardTotalUnits.SetData("Total Inventory", $"{metrics.TotalInventoryCount:N0} Units", $"{metrics.TotalProductCount} Total Products", Theme.Primary, "📦");
+                    _cardTotalValuation.SetData("Asset Valuation", $"${metrics.TotalAssetValuation:N2}", "Calculated at Cost Basis", Theme.Success, "💰");
+                    _cardLowStock.SetData("Restock Alerts", $"{metrics.LowStockProductCount} Items", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
+                    string prefix = metrics.TodayNetMovement >= 0 ? "+" : "";
+                    _cardNetMovement.SetData("Today's Movement", $"{prefix}{metrics.TodayNetMovement} Units", $"In: +{metrics.TodayStockIn} | Out: -{metrics.TodayStockOut}", Theme.Primary, "🔄");
+                }
+                else if (CurrentUser.IsSalesStaff)
+                {
+                    _cardTotalUnits.SetData("Catalog Products", $"{metrics.TotalProductCount} SKUs", "Available for Sale", Theme.Primary, "🏷️");
+                    _cardTotalValuation.SetData("Today's Dispatches", $"{metrics.TodayStockOut} Units Sold", "Customer Sales Today", Theme.Success, "🛍️");
+                    _cardLowStock.SetData("Low Stock Notice", $"{metrics.LowStockProductCount} Items Low", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
+                    _cardNetMovement.SetData("Total On Hand", $"{metrics.TotalInventoryCount:N0} Units", "Live Warehouse Stock", Theme.Primary, "🏢");
+                }
+                else
+                {
+                    _cardTotalUnits.SetData("Total Inventory", $"{metrics.TotalInventoryCount:N0} Units", $"{metrics.TotalProductCount} Total Products", Theme.Primary, "📦");
+                    _cardTotalValuation.SetData("Catalog Items", $"{metrics.TotalProductCount} Active SKUs", "Operational Catalog", Theme.Success, "📋");
+                    _cardLowStock.SetData("Restock Alerts", $"{metrics.LowStockProductCount} Items", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
+                    string prefix = metrics.TodayNetMovement >= 0 ? "+" : "";
+                    _cardNetMovement.SetData("Today's Movement", $"{prefix}{metrics.TodayNetMovement} Units", $"In: +{metrics.TodayStockIn} | Out: -{metrics.TodayStockOut}", Theme.Primary, "🔄");
+                }
 
                 BindMovementChart();
                 BindValuationChart();
@@ -1102,10 +1642,18 @@ namespace Inventory_Management_System.UI
             for (int i = 0; i < cats.Count; i++)
             {
                 var cat = cats[i];
+                string sliceName = CurrentUser.IsAdmin 
+                    ? $"{cat.CategoryName} (${cat.TotalValuation:N0})" 
+                    : $"{cat.CategoryName} ({cat.TotalUnits} Units)";
+
+                decimal sliceValue = CurrentUser.IsAdmin 
+                    ? cat.TotalValuation 
+                    : (decimal)cat.TotalUnits;
+
                 seriesList.Add(new PieSeries<decimal>
                 {
-                    Name = $"{cat.CategoryName} (${cat.TotalValuation:N0})",
-                    Values = new decimal[] { cat.TotalValuation },
+                    Name = sliceName,
+                    Values = new decimal[] { sliceValue },
                     Fill = new SolidColorPaint(colors[i % colors.Length]),
                     Pushout = 4
                 });
@@ -1126,8 +1674,8 @@ namespace Inventory_Management_System.UI
                 p.CategoryName,
                 On_Hand = p.CurrentStock,
                 Reorder_Point = p.ReorderLevel,
-                Unit_Cost = $"${p.CostPrice:N2}",
-                Total_Value = $"${p.TotalValuation:N2}",
+                Unit_Cost = CurrentUser.IsAdmin ? $"${p.CostPrice:N2}" : "—",
+                Total_Value = CurrentUser.IsAdmin ? $"${p.TotalValuation:N2}" : "—",
                 Status = p.EvaluateStockStatus()
             }).ToList();
 
@@ -1139,11 +1687,60 @@ namespace Inventory_Management_System.UI
         private void LoadProductsData()
         {
             _allCachedProducts = _inventoryService.GetAllProducts().ToList();
+            PopulateCategoryFilter();
             FilterProducts();
+        }
+
+        private bool _isPopulatingCategoryFilter;
+
+        private void PopulateCategoryFilter()
+        {
+            if (_cboCategoryFilter == null || _isPopulatingCategoryFilter) return;
+
+            try
+            {
+                _isPopulatingCategoryFilter = true;
+                string? currentSelection = _cboCategoryFilter.SelectedItem?.ToString();
+                _cboCategoryFilter.Items.Clear();
+                _cboCategoryFilter.Items.Add("All Categories");
+
+                var categories = _inventoryService.GetAllCategories();
+                if (categories != null)
+                {
+                    foreach (var cat in categories)
+                    {
+                        if (cat != null && !string.IsNullOrWhiteSpace(cat.CategoryName))
+                        {
+                            _cboCategoryFilter.Items.Add(cat.CategoryName);
+                        }
+                    }
+                }
+
+                int idx = 0;
+                if (!string.IsNullOrEmpty(currentSelection))
+                {
+                    for (int i = 0; i < _cboCategoryFilter.Items.Count; i++)
+                    {
+                        if (string.Equals(_cboCategoryFilter.Items[i]?.ToString(), currentSelection, StringComparison.OrdinalIgnoreCase))
+                        {
+                            idx = i;
+                            break;
+                        }
+                    }
+                }
+                _cboCategoryFilter.SelectedIndex = idx;
+            }
+            finally
+            {
+                _isPopulatingCategoryFilter = false;
+            }
         }
 
         private void FilterProducts()
         {
+            if (_isPopulatingCategoryFilter) return;
+            if (_txtProductSearch == null || _cboCategoryFilter == null || _gridAllProducts == null) return;
+
             string query = _txtProductSearch.Text.Trim().ToLowerInvariant();
             string selectedCat = _cboCategoryFilter.SelectedItem?.ToString() ?? "All Categories";
 
@@ -1168,9 +1765,9 @@ namespace Inventory_Management_System.UI
                 p.ProductName,
                 p.CategoryName,
                 p.SupplierName,
-                Cost = $"${p.CostPrice:N2}",
+                Cost = CurrentUser.IsAdmin ? $"${p.CostPrice:N2}" : "—",
                 Price = $"${p.SellingPrice:N2}",
-                Margin = $"{p.MarginPercentage:N1}%",
+                Margin = CurrentUser.IsAdmin ? $"{p.MarginPercentage:N1}%" : "—",
                 Stock = p.CurrentStock,
                 Reorder = p.ReorderLevel,
                 Status = p.EvaluateStockStatus()
@@ -1202,7 +1799,11 @@ namespace Inventory_Management_System.UI
                     (t.ReferenceNo != null && t.ReferenceNo.ToLowerInvariant().Contains(query)));
             }
 
-            if (typeFilter.StartsWith("IN"))
+            if (CurrentUser.IsSalesStaff)
+            {
+                filtered = filtered.Where(t => t.TransactionType == "OUT");
+            }
+            else if (typeFilter.StartsWith("IN"))
                 filtered = filtered.Where(t => t.TransactionType == "IN");
             else if (typeFilter.StartsWith("OUT"))
                 filtered = filtered.Where(t => t.TransactionType == "OUT");
@@ -1228,6 +1829,42 @@ namespace Inventory_Management_System.UI
             _gridMovements.RowTemplate.Height = 48;
             _gridMovements.DataSource = display;
             SafeConfigureImageGridColumns(_gridMovements, "Product", 200);
+        }
+
+        private void PrintSelectedMovementInvoice()
+        {
+            if (_gridMovements.CurrentRow == null || _gridMovements.CurrentRow.Index < 0)
+            {
+                MessageBox.Show("Please select a transaction record to print its invoice.", "Print Invoice", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            object? val = null;
+            try
+            {
+                if (_gridMovements.Columns.Contains("TransactionID"))
+                    val = _gridMovements.CurrentRow.Cells["TransactionID"].Value;
+            }
+            catch { }
+
+            if (val == null || !long.TryParse(val.ToString(), out long txId))
+            {
+                MessageBox.Show("Unable to identify the selected transaction ID.", "Print Invoice", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var tx = _allCachedTransactions.FirstOrDefault(t => t.TransactionID == txId);
+            if (tx == null)
+            {
+                MessageBox.Show("Transaction record not found in cache. Please refresh movements ledger.", "Print Invoice", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var prod = _allCachedProducts.FirstOrDefault(p => p.ProductID == tx.ProductID);
+            var invoice = Invoice.FromTransaction(tx, prod, CurrentUser.Role);
+
+            using var previewForm = new InvoicePreviewForm(invoice);
+            previewForm.ShowDialog(this);
         }
 
         private static void SafeConfigureImageGridColumns(DataGridView grid, string? primaryTextCol = null, int primaryColWidth = 200)
@@ -1278,7 +1915,14 @@ namespace Inventory_Management_System.UI
             decimal totalValuation = products.Sum(p => p.TotalValuation);
             int totalUnits = products.Sum(p => p.CurrentStock);
 
-            _lblAuditValuation.Text = $"Total Catalog Valuation: ${totalValuation:N2} | Total Units in Warehouse: {totalUnits:N0}";
+            if (CurrentUser.IsAdmin)
+            {
+                _lblAuditValuation.Text = $"Total Catalog Valuation: ${totalValuation:N2} | Total Units in Warehouse: {totalUnits:N0}";
+            }
+            else
+            {
+                _lblAuditValuation.Text = $"Physical Warehouse Inventory: {totalUnits:N0} Units across {products.Count} Active Products";
+            }
             _lblAuditItemsCount.Text = $"Audit Items Evaluated: {products.Count} products across {products.Select(p => p.CategoryID).Distinct().Count()} categories";
 
             var display = products.Select(p => new
@@ -1288,8 +1932,8 @@ namespace Inventory_Management_System.UI
                 p.ProductName,
                 Category = p.CategoryName,
                 System_Stock = p.CurrentStock,
-                Unit_Cost = $"${p.CostPrice:N2}",
-                Valuation = $"${p.TotalValuation:N2}",
+                Unit_Cost = CurrentUser.IsAdmin ? $"${p.CostPrice:N2}" : "—",
+                Valuation = CurrentUser.IsAdmin ? $"${p.TotalValuation:N2}" : "—",
                 Status = p.EvaluateStockStatus(),
                 Audit_Verdict = p.CurrentStock <= 0 ? "DEFICIT - Immediate Restock Needed" : (p.CurrentStock <= p.ReorderLevel ? "WARNING - Approaching Reorder Point" : "OPTIMAL - Stock Invariants Satisfied")
             }).ToList();
@@ -1311,6 +1955,12 @@ namespace Inventory_Management_System.UI
 
         private void OnAddProductClick(object? sender, EventArgs e)
         {
+            if (CurrentUser == null || !CurrentUser.IsAdmin)
+            {
+                MessageBox.Show("Access Denied: Only administrators can create new products.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             using var modal = new AddEditProductModalForm(_inventoryService, null);
             if (modal.ShowDialog(this) == DialogResult.OK)
             {
@@ -1320,13 +1970,20 @@ namespace Inventory_Management_System.UI
 
         private void OnEditProductClick(object? sender, EventArgs e)
         {
-            if (_gridAllProducts.SelectedRows.Count == 0)
+            if (CurrentUser == null || !CurrentUser.IsAdmin)
+            {
+                MessageBox.Show("Access Denied: Only administrators can edit product definitions.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_gridAllProducts.SelectedRows.Count == 0 ||
+                _gridAllProducts.SelectedRows[0].Cells["ProductID"]?.Value == null ||
+                !int.TryParse(_gridAllProducts.SelectedRows[0].Cells["ProductID"].Value?.ToString(), out int productId))
             {
                 MessageBox.Show("Please select a product from the table to edit.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            int productId = Convert.ToInt32(_gridAllProducts.SelectedRows[0].Cells["ProductID"].Value);
             var prod = _allCachedProducts.FirstOrDefault(p => p.ProductID == productId);
             if (prod == null) return;
 
@@ -1339,23 +1996,271 @@ namespace Inventory_Management_System.UI
 
         private void OnDeleteProductClick(object? sender, EventArgs e)
         {
-            if (_gridAllProducts.SelectedRows.Count == 0)
+            if (CurrentUser == null || !CurrentUser.IsAdmin)
             {
-                MessageBox.Show("Please select a product to delete.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Access Denied: Only administrators can delete products from the catalog.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            int productId = Convert.ToInt32(_gridAllProducts.SelectedRows[0].Cells["ProductID"].Value);
-            string sku = _gridAllProducts.SelectedRows[0].Cells["SKU"].Value?.ToString() ?? "Unknown";
-
-            var confirm = MessageBox.Show($"Are you sure you want to permanently delete product '{sku}'?\nAssociated stock transactions will also be purged.", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (confirm == DialogResult.Yes)
+            if (_gridAllProducts.SelectedRows.Count == 0)
             {
-                _inventoryService.DeleteProduct(productId);
-                MessageBox.Show($"Product '{sku}' deleted successfully.", "Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                LoadAllData();
+                MessageBox.Show("Please select at least one product to delete.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var selectedItems = _gridAllProducts.SelectedRows.Cast<DataGridViewRow>()
+                .Where(r => r.Cells["ProductID"]?.Value != null)
+                .Select(r => new
+                {
+                    Id = Convert.ToInt32(r.Cells["ProductID"].Value),
+                    Sku = r.Cells["SKU"]?.Value?.ToString() ?? "Unknown",
+                    Name = r.Cells["ProductName"]?.Value?.ToString() ?? "Product"
+                })
+                .ToList();
+
+            if (selectedItems.Count == 0) return;
+
+            if (selectedItems.Count == 1)
+            {
+                var item = selectedItems[0];
+                var confirm = MessageBox.Show(
+                    $"Are you sure you want to permanently delete product '{item.Sku} - {item.Name}'?\nAssociated stock transactions will also be purged.",
+                    "Confirm Delete",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (confirm == DialogResult.Yes)
+                {
+                    _inventoryService.DeleteProduct(item.Id);
+                    MessageBox.Show($"Product '{item.Sku}' deleted successfully.", "Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    LoadAllData();
+                }
+            }
+            else
+            {
+                var confirm = MessageBox.Show(
+                    $"Are you sure you want to permanently delete {selectedItems.Count} selected products?\nAll associated stock transactions will also be purged.",
+                    "Confirm Batch Delete",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (confirm == DialogResult.Yes)
+                {
+                    int deletedCount = 0;
+                    foreach (var item in selectedItems)
+                    {
+                        try
+                        {
+                            if (_inventoryService.DeleteProduct(item.Id))
+                            {
+                                deletedCount++;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to delete product {item.Id}: {ex.Message}");
+                        }
+                    }
+
+                    MessageBox.Show($"{deletedCount} of {selectedItems.Count} products were successfully deleted.", "Batch Delete Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    LoadAllData();
+                }
             }
         }
+
+        #region Category Management Actions
+
+        private void LoadCategoriesData()
+        {
+            _allCachedCategories = _inventoryService.GetAllCategories().ToList();
+            PopulateCategoryFilter();
+            FilterCategories();
+        }
+
+        private void FilterCategories()
+        {
+            if (_gridCategories == null || _txtCategorySearch == null) return;
+
+            try
+            {
+                string query = _txtCategorySearch.Text.Trim().ToLowerInvariant();
+                var filtered = (_allCachedCategories ?? new List<Category>()).AsEnumerable();
+
+                if (!string.IsNullOrWhiteSpace(query))
+                {
+                    filtered = filtered.Where(c => c != null && (
+                        (c.CategoryName != null && c.CategoryName.ToLowerInvariant().Contains(query)) ||
+                        (c.Description != null && c.Description.ToLowerInvariant().Contains(query))));
+                }
+
+                var list = filtered.ToList();
+
+                var display = list.Select(c => new
+                {
+                    c.CategoryID,
+                    Category = c.CategoryName ?? "Unnamed",
+                    Description = c.Description ?? "—",
+                    Assigned_Products = $"{c.ProductCount} item(s)"
+                }).ToList();
+
+                _gridCategories.DataSource = display;
+
+                if (_gridCategories.Columns != null && _gridCategories.Columns.Count > 0)
+                {
+                    if (_gridCategories.Columns.Contains("CategoryID"))
+                    {
+                        var colId = _gridCategories.Columns["CategoryID"];
+                        if (colId != null)
+                        {
+                            colId.HeaderText = "ID";
+                            colId.FillWeight = 15;
+                        }
+                    }
+
+                    if (_gridCategories.Columns.Contains("Category"))
+                    {
+                        var colName = _gridCategories.Columns["Category"];
+                        if (colName != null)
+                        {
+                            colName.HeaderText = "Category Name";
+                            colName.FillWeight = 35;
+                        }
+                    }
+
+                    if (_gridCategories.Columns.Contains("Description"))
+                    {
+                        var colDesc = _gridCategories.Columns["Description"];
+                        if (colDesc != null)
+                        {
+                            colDesc.HeaderText = "Description";
+                            colDesc.FillWeight = 35;
+                        }
+                    }
+
+                    if (_gridCategories.Columns.Contains("Assigned_Products"))
+                    {
+                        var colProducts = _gridCategories.Columns["Assigned_Products"];
+                        if (colProducts != null)
+                        {
+                            colProducts.HeaderText = "Catalog Products";
+                            colProducts.FillWeight = 20;
+                        }
+                    }
+                }
+
+                if (_lblCategorySummary != null && _allCachedCategories != null)
+                {
+                    int totalProds = _allCachedCategories.Sum(c => c?.ProductCount ?? 0);
+                    _lblCategorySummary.Text = $"Total: {_allCachedCategories.Count} categories ({totalProds} products classified)";
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"FilterCategories error: {ex.Message}");
+            }
+        }
+
+        private void OnAddCategoryClick(object? sender, EventArgs e)
+        {
+            if (CurrentUser == null || !CurrentUser.IsAdmin)
+            {
+                MessageBox.Show("Access Denied: Only administrators can create categories.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var modal = new AddEditCategoryModalForm(_inventoryService, null);
+            if (modal.ShowDialog(this) == DialogResult.OK)
+            {
+                LoadCategoriesData();
+                LoadProductsData();
+            }
+        }
+
+        private void OnEditCategoryClick(object? sender, EventArgs e)
+        {
+            if (CurrentUser == null || !CurrentUser.IsAdmin)
+            {
+                MessageBox.Show("Access Denied: Only administrators can edit categories.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_gridCategories.SelectedRows.Count == 0 ||
+                _gridCategories.SelectedRows[0].Cells["CategoryID"]?.Value == null ||
+                !int.TryParse(_gridCategories.SelectedRows[0].Cells["CategoryID"].Value?.ToString(), out int categoryId))
+            {
+                MessageBox.Show("Please select a category from the list to edit.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var category = _allCachedCategories.FirstOrDefault(c => c.CategoryID == categoryId);
+            if (category == null) return;
+
+            using var modal = new AddEditCategoryModalForm(_inventoryService, category);
+            if (modal.ShowDialog(this) == DialogResult.OK)
+            {
+                LoadCategoriesData();
+                LoadProductsData();
+            }
+        }
+
+        private void OnDeleteCategoryClick(object? sender, EventArgs e)
+        {
+            if (CurrentUser == null || !CurrentUser.IsAdmin)
+            {
+                MessageBox.Show("Access Denied: Only administrators can delete categories.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_gridCategories.SelectedRows.Count == 0 ||
+                _gridCategories.SelectedRows[0].Cells["CategoryID"]?.Value == null ||
+                !int.TryParse(_gridCategories.SelectedRows[0].Cells["CategoryID"].Value?.ToString(), out int categoryId))
+            {
+                MessageBox.Show("Please select a category to delete.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var category = _allCachedCategories.FirstOrDefault(c => c.CategoryID == categoryId);
+            if (category == null) return;
+
+            if (category.ProductCount > 0)
+            {
+                MessageBox.Show(
+                    $"Cannot delete category '{category.CategoryName}' because it currently contains {category.ProductCount} product(s).\n\nPlease reassign or delete these products first to preserve catalog referential integrity.",
+                    "Integrity Violation",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                $"Are you sure you want to permanently delete the category '{category.CategoryName}' (ID: #{categoryId})?",
+                "Confirm Delete Category",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (confirm != DialogResult.Yes) return;
+
+            try
+            {
+                bool deleted = _inventoryService.DeleteCategory(categoryId);
+                if (deleted)
+                {
+                    MessageBox.Show($"Category '{category.CategoryName}' deleted successfully.", "Category Removed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    LoadCategoriesData();
+                    LoadProductsData();
+                }
+                else
+                {
+                    MessageBox.Show("Failed to delete the category. It may have already been removed.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not delete category:\n\n{ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        #endregion
 
         private void RestockFromGrid(DataGridView grid)
         {
@@ -1371,7 +2276,7 @@ namespace Inventory_Management_System.UI
 
         private void OpenRestockModal(int? productId)
         {
-            using var modal = new StockTransactionModalForm(_inventoryService, productId);
+            using var modal = new StockTransactionModalForm(_inventoryService, productId, CurrentUser);
             if (modal.ShowDialog(this) == DialogResult.OK)
             {
                 LoadAllData();
@@ -1390,15 +2295,17 @@ namespace Inventory_Management_System.UI
             {
                 row.DefaultCellStyle.BackColor = Theme.DangerLight;
                 row.DefaultCellStyle.ForeColor = Theme.DangerDark;
-                row.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#FCA5A5");
-                row.DefaultCellStyle.SelectionForeColor = Theme.DangerDark;
+                // High contrast highlight when selected so user clearly knows what is selected to delete
+                row.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#2563EB");
+                row.DefaultCellStyle.SelectionForeColor = Color.White;
             }
             else if (status == "Low Stock")
             {
                 row.DefaultCellStyle.BackColor = Theme.WarningLight;
                 row.DefaultCellStyle.ForeColor = Theme.WarningDark;
-                row.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#FDE68A");
-                row.DefaultCellStyle.SelectionForeColor = Theme.WarningDark;
+                // High contrast highlight when selected so user clearly knows what is selected to delete
+                row.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#2563EB");
+                row.DefaultCellStyle.SelectionForeColor = Color.White;
             }
         }
 

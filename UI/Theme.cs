@@ -25,6 +25,7 @@ namespace Inventory_Management_System.UI
         // Accent & State Colors
         public static readonly Color Primary       = ColorTranslator.FromHtml("#3B82F6"); // Blue 500
         public static readonly Color PrimaryHover  = ColorTranslator.FromHtml("#2563EB"); // Blue 600
+        public static readonly Color Secondary     = ColorTranslator.FromHtml("#64748B"); // Slate 500
         public static readonly Color Danger        = ColorTranslator.FromHtml("#EF4444"); // Red 500
         public static readonly Color DangerLight   = ColorTranslator.FromHtml("#FEE2E2"); // Red 100
         public static readonly Color DangerDark    = ColorTranslator.FromHtml("#991B1B"); // Red 800
@@ -48,6 +49,7 @@ namespace Inventory_Management_System.UI
         public static readonly Font FontBody       = new Font("Segoe UI", 9.5f, FontStyle.Regular);
         public static readonly Font FontBodyBold   = new Font("Segoe UI", 9.5f, FontStyle.Bold);
         public static readonly Font FontCaption    = new Font("Segoe UI", 8.5f, FontStyle.Regular);
+        public static readonly Font FontCaptionBold= new Font("Segoe UI", 8.5f, FontStyle.Bold);
 
         /// <summary>
         /// Applies modern flat styling to standard WinForms buttons.
@@ -60,7 +62,8 @@ namespace Inventory_Management_System.UI
             btn.ForeColor = fg;
             btn.Font = FontBodyBold;
             btn.Cursor = Cursors.Hand;
-            btn.Padding = new Padding(12, 6, 12, 6);
+            btn.TextAlign = ContentAlignment.MiddleCenter;
+            btn.Padding = new Padding(12, 0, 12, 0);
 
             btn.MouseEnter += (s, e) =>
             {
@@ -84,7 +87,7 @@ namespace Inventory_Management_System.UI
             dgv.RowHeadersVisible = false;
             dgv.EnableHeadersVisualStyles = false;
             dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgv.MultiSelect = false;
+            dgv.MultiSelect = true; // Enables standard Windows Ctrl+Click and Shift+Click multi-row selection
             dgv.AllowUserToAddRows = false;
             dgv.AllowUserToDeleteRows = false;
             dgv.AllowUserToResizeRows = false;
@@ -103,12 +106,14 @@ namespace Inventory_Management_System.UI
             dgv.DefaultCellStyle.BackColor = Color.White;
             dgv.DefaultCellStyle.ForeColor = TextDark;
             dgv.DefaultCellStyle.Font = FontBody;
-            dgv.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#EFF6FF");
-            dgv.DefaultCellStyle.SelectionForeColor = ColorTranslator.FromHtml("#1D4ED8");
+            dgv.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#2563EB"); // Vivid Royal Blue selection highlight
+            dgv.DefaultCellStyle.SelectionForeColor = Color.White;
             dgv.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
 
             // Alternating Row Styling
             dgv.AlternatingRowsDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#F8FAFC");
+            dgv.AlternatingRowsDefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#1D4ED8"); // Deep Royal Blue selection highlight
+            dgv.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.White;
         }
 
         /// <summary>

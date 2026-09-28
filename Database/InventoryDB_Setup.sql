@@ -43,7 +43,7 @@ CREATE TABLE Users (
     
     CONSTRAINT PK_Users PRIMARY KEY CLUSTERED (UserID),
     CONSTRAINT UQ_Users_Username UNIQUE (Username),
-    CONSTRAINT CK_Users_Role CHECK (Role IN ('Admin', 'Staff'))
+    CONSTRAINT CK_Users_Role CHECK (Role IN ('Admin', 'Staff', 'Sales Staff'))
 );
 GO
 
@@ -296,7 +296,8 @@ GO
 -- Default Users (Password: '123' hashed with SHA-256: a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3)
 INSERT INTO Users (Username, PasswordHash, FullName, Role) VALUES 
 ('admin', 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'System Administrator', 'Admin'),
-('staff', 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'Warehouse Operator', 'Staff');
+('staff', 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'Warehouse Operator', 'Staff'),
+('sales', 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'Sales Representative', 'Sales Staff');
 GO
 
 -- 4 Categories

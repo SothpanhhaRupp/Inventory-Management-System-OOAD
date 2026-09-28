@@ -35,7 +35,7 @@ namespace Inventory_Management_System.UI
         private void InitializeComponent()
         {
             Text = "Sign In - Inventory Intelligence OS";
-            Size = new Size(480, 620);
+            Size = new Size(480, 550);
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -192,7 +192,7 @@ namespace Inventory_Management_System.UI
                 Location = new Point(24, y),
                 Size = new Size(card.Width - 48, 32),
                 Font = Theme.FontBody,
-                PlaceholderText = "e.g. admin or staff",
+                PlaceholderText = "e.g. admin, staff, or sales",
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             card.Controls.Add(_txtUsername);
@@ -268,71 +268,6 @@ namespace Inventory_Management_System.UI
             _btnLogin.Click += OnLoginClick;
             card.Controls.Add(_btnLogin);
             AcceptButton = _btnLogin;
-            y += 54;
-
-            // Quick demo accounts panel
-            var demoPanel = new Panel
-            {
-                Location = new Point(24, y),
-                Size = new Size(card.Width - 48, 55),
-                BackColor = ColorTranslator.FromHtml("#F8FAFC"),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-            };
-            demoPanel.Paint += (s, e) =>
-            {
-                using var p = new Pen(Theme.CardBorder, 1f) { DashStyle = DashStyle.Dash };
-                e.Graphics.DrawRectangle(p, 0, 0, demoPanel.Width - 1, demoPanel.Height - 1);
-            };
-
-            var lblDemo = new Label
-            {
-                Text = "Demo Accounts (Click to auto-fill):",
-                Font = Theme.FontCaption,
-                ForeColor = Theme.TextMuted,
-                Location = new Point(10, 6),
-                AutoSize = true
-            };
-
-            var btnDemoAdmin = new Button
-            {
-                Text = "Admin (admin / 123)",
-                Size = new Size(160, 24),
-                Location = new Point(10, 24),
-                FlatStyle = FlatStyle.Flat,
-                Font = Theme.FontCaption,
-                Cursor = Cursors.Hand
-            };
-            Theme.ApplyFlatButton(btnDemoAdmin, ColorTranslator.FromHtml("#EFF6FF"), Theme.PrimaryHover);
-            btnDemoAdmin.Click += (s, e) =>
-            {
-                _txtUsername.Text = "admin";
-                _txtPassword.Text = "123";
-                _errorPanel.Visible = false;
-                _txtPassword.Focus();
-            };
-
-            var btnDemoStaff = new Button
-            {
-                Text = "Staff (staff / 123)",
-                Size = new Size(160, 24),
-                Location = new Point(180, 24),
-                FlatStyle = FlatStyle.Flat,
-                Font = Theme.FontCaption,
-                Cursor = Cursors.Hand
-            };
-            Theme.ApplyFlatButton(btnDemoStaff, ColorTranslator.FromHtml("#F1F5F9"), Theme.TextDark);
-            btnDemoStaff.Click += (s, e) =>
-            {
-                _txtUsername.Text = "staff";
-                _txtPassword.Text = "123";
-                _errorPanel.Visible = false;
-                _txtPassword.Focus();
-            };
-
-            demoPanel.Controls.Add(lblDemo);
-            demoPanel.Controls.Add(btnDemoAdmin);
-            demoPanel.Controls.Add(btnDemoStaff);
-            card.Controls.Add(demoPanel);
 
             container.Controls.Add(card);
             Controls.Add(container);

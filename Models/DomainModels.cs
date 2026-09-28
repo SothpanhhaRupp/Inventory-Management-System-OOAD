@@ -12,10 +12,12 @@ namespace Inventory_Management_System.Models
         public string Username { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
-        public string Role { get; set; } = "Staff"; // "Admin" or "Staff"
+        public string Role { get; set; } = "Staff"; // "Admin", "Staff", or "Sales Staff"
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         public bool IsAdmin => string.Equals(Role, "Admin", StringComparison.OrdinalIgnoreCase);
+        public bool IsWarehouseStaff => string.Equals(Role, "Staff", StringComparison.OrdinalIgnoreCase) || string.Equals(Role, "Warehouse Staff", StringComparison.OrdinalIgnoreCase);
+        public bool IsSalesStaff => string.Equals(Role, "Sales Staff", StringComparison.OrdinalIgnoreCase) || string.Equals(Role, "Sales", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -26,6 +28,7 @@ namespace Inventory_Management_System.Models
         public int CategoryID { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public int ProductCount { get; set; }
 
         public override string ToString() => CategoryName;
     }
