@@ -60,7 +60,6 @@ namespace Inventory_Management_System.UI
         private Panel _panelDashboardView = null!;
         private Panel _panelProductsView = null!;
         private Panel _panelMovementsView = null!;
-        private Panel _panelAuditsView = null!;
         private Panel _panelCategoriesView = null!;
         private Panel _panelReportsView = null!;
         private Panel _panelUsersView = null!;
@@ -90,11 +89,6 @@ namespace Inventory_Management_System.UI
         private TextBox _txtMovementSearch = null!;
         private ComboBox _cboMovementTypeFilter = null!;
         private List<StockTransaction> _allCachedTransactions = new();
-
-        // 4. Inventory Audits View Controls
-        private DataGridView _gridAudit = null!;
-        private Label _lblAuditValuation = null!;
-        private Label _lblAuditItemsCount = null!;
 
         // 5. Settings View Controls
         private Label _lblConnectionTestResult = null!;
@@ -275,10 +269,6 @@ namespace Inventory_Management_System.UI
 
             navContainer.Controls.Add(CreateNavButton("Products", prodText, ref btnY));
             navContainer.Controls.Add(CreateNavButton("Movements", moveText, ref btnY));
-            if (!CurrentUser.IsSalesStaff)
-            {
-                navContainer.Controls.Add(CreateNavButton("Audits", "📑  Inventory Audits", ref btnY));
-            }
             if (CurrentUser.IsAdmin)
             {
                 navContainer.Controls.Add(CreateNavButton("Reports", "📈  Monthly Reports", ref btnY));
@@ -420,7 +410,6 @@ namespace Inventory_Management_System.UI
             _panelDashboardView.Visible = false;
             _panelProductsView.Visible = false;
             _panelMovementsView.Visible = false;
-            _panelAuditsView.Visible = false;
             _panelCategoriesView.Visible = false;
             _panelReportsView.Visible = false;
             _panelUsersView.Visible = false;
@@ -471,20 +460,6 @@ namespace Inventory_Management_System.UI
                     _panelMovementsView.Visible = true;
                     _panelMovementsView.BringToFront();
                     LoadMovementsData();
-                    break;
-
-                case "audits":
-                    if (CurrentUser.IsSalesStaff)
-                    {
-                        MessageBox.Show("Access Denied: Physical inventory audits are restricted to Warehouse and Administrative staff.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        SwitchView(CurrentUser.IsAdmin ? "Dashboard" : "Products");
-                        return;
-                    }
-                    _lblHeaderTitle.Text = "Inventory Health & Verification Audits";
-                    _lblHeaderSubtitle.Text = "Physical count reconciliation & stock invariant monitoring";
-                    _panelAuditsView.Visible = true;
-                    _panelAuditsView.BringToFront();
-                    LoadAuditData();
                     break;
 
                 case "settings":
@@ -654,7 +629,6 @@ namespace Inventory_Management_System.UI
             BuildDashboardView();
             BuildProductsView();
             BuildMovementsView();
-            BuildAuditsView();
             BuildCategoriesView();
             BuildReportsView();
             BuildUsersView();
@@ -1126,19 +1100,6 @@ namespace Inventory_Management_System.UI
             Theme.ApplyFlatButton(btnPrintInvoice, Theme.CardBorder, Theme.TextDark);
             btnPrintInvoice.Click += (s, e) => PrintSelectedMovementInvoice();
 
-            var btnNewTx = new Button
-            {
-                Text = CurrentUser.IsSalesStaff ? "🛒  Record Customer Sale" : "+  Record Stock Movement",
-                Size = new Size(220, 36),
-                MinimumSize = new Size(210, 36),
-                AutoSize = true,
-                Dock = DockStyle.Right
-            };
-            Theme.ApplyFlatButton(btnNewTx, CurrentUser.IsSalesStaff ? Theme.Success : Theme.Primary, Color.White);
-            btnNewTx.Click += (s, e) => OpenRestockModal(null);
-
-            actionPanel.Controls.Add(btnNewTx);
-            actionPanel.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8, BackColor = Color.Transparent });
             actionPanel.Controls.Add(btnPrintInvoice);
             actionPanel.Controls.Add(searchFilterFlow);
 
@@ -1173,84 +1134,6 @@ namespace Inventory_Management_System.UI
             gridCard.BringToFront();
 
             _contentContainer.Controls.Add(_panelMovementsView);
-        }
-
-        #endregion
-
-        #region View 4: Inventory Audits View
-
-        private void BuildAuditsView()
-        {
-            _panelAuditsView = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Theme.CanvasBg,
-                Padding = new Padding(24, 20, 24, 24)
-            };
-
-            // Summary Header Card
-            var summaryCard = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 85,
-                BackColor = Color.White,
-                Padding = new Padding(20, 16, 20, 16)
-            };
-            summaryCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, summaryCard.Width - 1, summaryCard.Height - 1); };
-
-            var summaryInfoFlow = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Left,
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                BackColor = Color.Transparent
-            };
-
-            _lblAuditValuation = new Label { Text = "Total Catalog Valuation: $0.00", Font = Theme.FontHeadingSm, ForeColor = Theme.SuccessDark, AutoSize = true, Margin = new Padding(0, 0, 0, 6) };
-            _lblAuditItemsCount = new Label { Text = "Audit Items Evaluated: 0 products", Font = Theme.FontCaption, ForeColor = Theme.TextMuted, AutoSize = true };
-
-            summaryInfoFlow.Controls.Add(_lblAuditValuation);
-            summaryInfoFlow.Controls.Add(_lblAuditItemsCount);
-
-            var btnRunAudit = new Button
-            {
-                Text = "🔍  Run Physical Audit Verification",
-                Size = new Size(240, 36),
-                Dock = DockStyle.Right
-            };
-            Theme.ApplyFlatButton(btnRunAudit, Theme.Primary, Color.White);
-            btnRunAudit.Click += (s, e) =>
-            {
-                LoadAuditData();
-                MessageBox.Show("Physical audit reconciliation scan complete!\nNo unrecorded inventory variances detected.", "Audit Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            };
-
-            summaryCard.Controls.Add(btnRunAudit);
-            summaryCard.Controls.Add(summaryInfoFlow);
-
-            var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
-
-            // Audit Grid
-            var gridCard = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.White,
-                Padding = new Padding(16)
-            };
-            gridCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, gridCard.Width - 1, gridCard.Height - 1); };
-
-            _gridAudit = new DataGridView { Dock = DockStyle.Fill };
-            Theme.ApplyModernGrid(_gridAudit);
-            _gridAudit.CellFormatting += OnGridCellFormatting;
-
-            gridCard.Controls.Add(_gridAudit);
-
-            _panelAuditsView.Controls.Add(gridCard);
-            _panelAuditsView.Controls.Add(spacer);
-            _panelAuditsView.Controls.Add(summaryCard);
-            gridCard.BringToFront();
-
-            _contentContainer.Controls.Add(_panelAuditsView);
         }
 
         #endregion
@@ -2280,10 +2163,6 @@ namespace Inventory_Management_System.UI
             LoadCategoriesData();
             LoadProductsData();
             LoadMovementsData();
-            if (!CurrentUser.IsSalesStaff)
-            {
-                LoadAuditData();
-            }
         }
 
         private void LoadDashboardData()
@@ -2802,47 +2681,6 @@ namespace Inventory_Management_System.UI
             {
                 System.Diagnostics.Debug.WriteLine($"SafeConfigureImageGridColumns: {ex.Message}");
             }
-        }
-
-        private void LoadAuditData()
-        {
-            var products = _inventoryService.GetAllProducts().ToList();
-
-            decimal totalValuation = products.Sum(p => p.TotalValuation);
-            int totalUnits = products.Sum(p => p.CurrentStock);
-
-            if (CurrentUser.IsAdmin)
-            {
-                _lblAuditValuation.Text = $"Total Catalog Valuation: ${totalValuation:N2} | Total Units in Warehouse: {totalUnits:N0}";
-            }
-            else
-            {
-                _lblAuditValuation.Text = $"Physical Warehouse Inventory: {totalUnits:N0} Units across {products.Count} Active Products";
-            }
-            _lblAuditItemsCount.Text = $"Audit Items Evaluated: {products.Count} products across {products.Select(p => p.CategoryID).Distinct().Count()} categories";
-
-            var display = products.Select(p => new
-            {
-                p.ProductID,
-                p.SKU,
-                p.ProductName,
-                Category = p.CategoryName,
-                System_Stock = p.CurrentStock,
-                Unit_Cost = CurrentUser.IsAdmin ? $"${p.CostPrice:N2}" : "—",
-                Valuation = CurrentUser.IsAdmin ? $"${p.TotalValuation:N2}" : "—",
-                Status = p.EvaluateStockStatus(),
-                Audit_Verdict = p.CurrentStock <= 0 ? "DEFICIT - Immediate Restock Needed" : (p.CurrentStock <= p.ReorderLevel ? "WARNING - Approaching Reorder Point" : "OPTIMAL - Stock Invariants Satisfied")
-            }).ToList();
-
-            _gridAudit.DataSource = display;
-            var colId = _gridAudit.Columns["ProductID"];
-            if (colId != null) colId.Visible = false;
-
-            var colName = _gridAudit.Columns["ProductName"];
-            if (colName != null && colName.Displayed) colName.Width = 240;
-
-            var colVerdict = _gridAudit.Columns["Audit_Verdict"];
-            if (colVerdict != null && colVerdict.Displayed) colVerdict.Width = 250;
         }
 
         #endregion
