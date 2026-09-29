@@ -28,8 +28,8 @@ namespace Inventory_Management_System.BusinessLogic
         // Cache recently alerted product ID -> (LastStock, AlertTimestamp) to avoid notification floods
         private readonly ConcurrentDictionary<int, (int Stock, DateTime Timestamp)> _alertCooldowns = new();
 
-        public string BotToken { get; private set; } = "YOUR_TELEGRAM_BOT_TOKEN_HERE";
-        public string ChatId { get; private set; } = "YOUR_TELEGRAM_CHAT_ID_HERE";
+        public string BotToken { get; private set; } = "8983227565:AAGcRru8Ndl2zze-PdSvqjGfKKFI_PSNAfY";
+        public string ChatId { get; private set; } = "1712932157";
         public bool IsEnabled { get; set; } = true;
 
         public TelegramService()

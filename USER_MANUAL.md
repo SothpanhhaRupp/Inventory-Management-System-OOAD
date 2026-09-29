@@ -39,10 +39,19 @@
    - [Catalog Valuation & Capital Summary](#catalog-valuation--capital-summary)
    - [Automated Audit Verdicts](#automated-audit-verdicts)
    - [Physical Audit Verification Scan](#physical-audit-verification-scan)
-8. [System Settings & Diagnostics](#8-system-settings--diagnostics)
-   - [SQL Connection Testing Tool](#sql-connection-testing-tool)
-   - [Architecture & Operator Telemetry](#architecture--operator-telemetry)
-9. [Troubleshooting & Common Questions](#9-troubleshooting--common-questions)
+8. [Monthly Reports & Multi-Dimensional Analytics](#8-monthly-reports--multi-dimensional-analytics)
+   - [Interactive Multi-Filter Bar](#interactive-multi-filter-bar)
+   - [Dynamic Period KPI Telemetry Cards](#dynamic-period-kpi-telemetry-cards)
+   - [Detailed Period Ledger & Actions](#detailed-period-ledger--actions)
+9. [User Management & Role-Based Access Control (Admin Only)](#9-user-management--role-based-access-control-admin-only)
+   - [Role Permissions & Capabilities Matrix](#role-permissions--capabilities-matrix)
+   - [Account Provisioning (Add New User)](#account-provisioning-add-new-user)
+   - [Modifying Roles & Password Resets](#modifying-roles--password-resets)
+   - [Safety Guardrails & Account Deletion](#safety-guardrails--account-deletion)
+10. [System Settings & Diagnostics](#10-system-settings--diagnostics)
+    - [SQL Connection Testing Tool](#sql-connection-testing-tool)
+    - [Architecture & Operator Telemetry](#architecture--operator-telemetry)
+11. [Troubleshooting & Common Questions](#11-troubleshooting--common-questions)
 
 ---
 
@@ -149,9 +158,9 @@ When launching the application, you are presented with the **Account Authenticat
 
 | Role | Username | Password | Access Rights |
 | :--- | :--- | :--- | :--- |
-| **Administrator** | `admin` | `123` | **Full Authority**: Add/Edit/Delete products, Cost/Margin visibility, Asset Valuation analytics, Record stock movements, Run audits, System Settings |
-| **Warehouse Staff** | `staff` | `123` | **Operational Warehouse**: Stock In / Out / Adjustments, Physical count audits, Read-Only catalog browsing, Quick restock workflows. *Costs, Margins, Catalog Editing, and System Settings are restricted.* |
-| **Sales Staff** | `sales` | `123` | **Customer Sales & Dispatches**: Dedicated Sales Dashboard, Catalog browsing with retail selling prices, Customer Sales order dispatch (`OUT`), sales history ledger. *Costs, Margins, IN/ADJUSTMENT movements, Audits, and Settings are restricted.* |
+| **Administrator** | `admin` | `123` | **Full Authority**: Add/Edit/Delete products, Cost/Margin visibility, Asset Valuation analytics, Top Selling analytics, Monthly Reports & Analytics, Record stock movements, Run audits, System Settings |
+| **Warehouse Staff** | `staff` | `123` | **Operational Warehouse**: Stock In / Out / Adjustments, Physical count audits, Read-Only catalog browsing, Quick restock workflows. *Costs, Margins, Catalog Editing, System Settings, Executive Dashboard, and Monthly Reports are restricted.* |
+| **Sales Staff** | `sales` | `123` | **Customer Sales & Dispatches**: Catalog browsing with retail selling prices, Customer Sales order dispatch (`OUT`), sales history ledger. *Costs, Margins, IN/ADJUSTMENT movements, Audits, Settings, Executive Dashboard, and Monthly Reports are restricted.* |
 
 ---
 
@@ -164,7 +173,7 @@ When launching the application, you are presented with the **Account Authenticat
 ---
 
 ### 7-Day "Remember Me" Session & Logout
-- **Remember Me for 7 Days**: When this box is checked, your session token is securely cached on the local machine. Reopening the application bypasses the login screen directly to the dashboard.
+- **Remember Me for 7 Days**: When this box is checked, your session token is securely cached on the local machine. Reopening the application bypasses the login screen directly to your primary view (Executive Dashboard for Admin, Product Catalog for Staff/Sales).
 - **Logging Out**:
   1. Click the red **`Logout`** link in the sidebar's bottom profile card.
   2. Confirm the logout prompt. Your cached session token will be cleared and the sign-in screen will reappear.
@@ -172,9 +181,9 @@ When launching the application, you are presented with the **Account Authenticat
 
 ---
 
-## 4. Executive Dashboard Navigation
+## 4. Executive Dashboard Navigation (Administrators Only)
 
-After logging in, the **Executive Dashboard** displays real-time inventory telemetry.
+After logging in as Administrator, the **Executive Dashboard** displays real-time inventory telemetry (hidden from Staff and Sales roles).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -200,12 +209,14 @@ At the top of the dashboard are 4 interactive summary cards:
 ### Interactive Analytics Charts
 - **Stock Movement Inflow vs Outflow**: A dual-bar column chart illustrating inventory intake (blue) vs dispatch (red) across the last 6 months.
 - **Valuation by Category**: A segmented pie chart visualizing capital allocation across categories (e.g. *Electronics*, *Beverages*, *Perishables*, *Office Supplies*).
+- **Top Selling Products & Velocity (Customer Outflow)**: A dedicated executive column chart showing the top 5 highest-selling products by units sold, paired with a ranked leaderboard panel (🥇 #1, 🥈 #2, 🥉 #3, etc.) displaying product names, units dispatched, and total sales revenue.
 
 ### Urgent Restock Deficit Monitor
 The bottom table highlights products requiring immediate procurement:
 - **Red Rows**: Products with **`Out of Stock`** status (`Stock = 0`).
 - **Yellow Rows**: Products with **`Low Stock`** status (`Stock <= Reorder Level`).
 - **Quick Action**: Double-click any row to immediately open the restock dialog for that item.
+- **Telegram Alert**: Click **`📲 ផ្ញើ Alert ទៅ Telegram`** to broadcast an automated summary of low-stock items directly to your Telegram channel or group.
 
 ---
 
@@ -398,7 +409,82 @@ Click **`🔍  Run Physical Audit Verification`** to re-scan the entire database
 
 ---
 
-## 8. System Settings & Diagnostics
+## 8. Monthly Reports & Multi-Dimensional Analytics (Administrators Only)
+
+Click **`📈  Monthly Reports`** in the left sidebar to access the periodic operational and financial telemetry suite (restricted to Administrators).
+
+### Interactive Multi-Filter Bar
+The reports suite features a rich filter engine that operates seamlessly across historical movements:
+- **Year Filter**: Select between `All Years`, `2026`, `2025`, `2024`, or current calendar period.
+- **Month Filter**: Select between `All Months` or specific calendar months (`January` through `December`).
+- **Category Filter**: Filter records by product taxonomy (`All Categories`, `Electronics`, `Office Supplies`, etc.).
+- **Movement Type Filter**: Isolate `All Types`, `OUT (Customer Sales)`, `IN (Stock Intake)`, or `ADJUSTMENT (Audits)`.
+- **Search Keyword**: Type any SKU or product name to filter the report records in real-time.
+
+### Dynamic Period KPI Telemetry Cards
+Four responsive metric cards update instantaneously upon any filter change:
+1. **Total Movements**: Total count of transaction records executed within the selected period.
+2. **Stock Intake (IN)**: Cumulative inventory volume received into warehouse stock.
+3. **Sales Dispatches (OUT)**: Cumulative units sold and dispatched to customers.
+4. **Sales Revenue / Net Movement**: Total gross revenue generated from customer dispatches (or net physical unit shift for warehouse operators).
+
+### Detailed Period Ledger & Actions
+- **Double-Click Row**: Double-clicking any transaction row opens the high-resolution printable invoice preview.
+- **`📥  Export CSV`**: Exports the entire filtered report dataset into a standard UTF-8 CSV spreadsheet for external bookkeeping or Microsoft Excel import.
+- **`🔄  Refresh`**: Reloads the report dataset and updates all KPI cards to reflect real-time transactions.
+
+---
+
+## 9. User Management & Role-Based Access Control (Admin Only)
+
+The **User Management** console empowers Administrators to provision employee accounts, assign Role-Based Access Control (RBAC) privileges, and manage security credentials across the organization.
+
+> [!IMPORTANT]
+> **Administrative Security Boundary:**  
+> The `👥  User Management` button and route are exclusively visible and accessible to accounts with the **`Admin`** role. If a non-administrative user (`Staff` or `Sales Staff`) attempts direct URL or event routing to the user console, the system prompts an `Access Denied: User Management is restricted to Administrators only.` security notice and immediately redirects to the Product Catalog.
+
+### Role Permissions & Capabilities Matrix
+
+| Feature / Workspace View | Admin | Staff (Warehouse) | Sales Staff (Representative) |
+| :--- | :---: | :---: | :---: |
+| **Executive Dashboard & Charts** | ✅ Full Access | ❌ Hidden | ❌ Hidden |
+| **Monthly Reports & CSV Exports** | ✅ Full Access | ❌ Hidden | ❌ Hidden |
+| **User Provisioning & Credentials** | ✅ Full Access | ❌ Hidden | ❌ Hidden |
+| **Categories Management** | ✅ Full Access | ❌ Hidden | ❌ Hidden |
+| **System Settings & Architecture** | ✅ Full Access | ❌ Hidden | ❌ Hidden |
+| **Inventory Physical Audits** | ✅ Full Access | ✅ Full Access | ❌ Hidden |
+| **Product Master Catalog** | ✅ Full Access (Add/Edit/Delete) | 👁️ Read-Only Stock View | 🛒 Customer Selling Catalog |
+| **Stock Movement Ledger** | ✅ Complete Ledger | 🔄 Stock In, Out, Adjust | 🛒 Sales Orders & Dispatch |
+| **Invoice & Receipt Preview** | ✅ Full Access | ✅ Full Access | ✅ Full Access |
+
+### Account Provisioning (Add New User)
+1. Navigate to **`👥  User Management`** from the left navigation sidebar.
+2. Review the top telemetry cards summarizing **Total Users**, **Administrators**, **Warehouse Staff**, and **Sales Staff**.
+3. Click the blue **`➕  New User`** button to open the account registration dialog:
+   - **Username**: Unique login identifier (minimum 3 characters, e.g. `panha_sales`).
+   - **Full Name**: Official display name (e.g. `Soth Panha`).
+   - **Security Role**: Choose between `Admin`, `Staff`, or `Sales Staff`. An explanatory permission badge updates dynamically below the selector.
+   - **Password & Confirm Password**: Minimum 3 characters; verified for exact match before hashing.
+4. Click **`Create User`**. The system cryptographically hashes the password with **SHA-256** and saves the record to SQL Server with seamless fallback to demo storage if offline.
+
+### Modifying Roles & Password Resets
+1. Select a user row in the table, or double-click the record.
+2. Click **`✏️  Edit User`**.
+3. You can update the user's **Full Display Name** and change their **Security Role**.
+4. **Password Reset**: Leave the password fields blank to retain the user's current password. To reset or change the password, enter a new password and confirm it.
+5. Click **`Update Profile`** to apply the changes immediately.
+
+### Safety Guardrails & Account Deletion
+1. Select the user account and click **`🗑️  Delete`**.
+2. A confirmation prompt appears specifying the target username and ID.
+3. **Built-in Security Constraints**:
+   - **Self-Deletion Protection**: An Administrator cannot delete their own active login account.
+   - **Last Admin Invariant**: The system strictly prevents deleting the final remaining Administrator account to avoid organizational lockout.
+   - **Referential Integrity**: Historical stock transactions previously logged by a deleted user preserve integrity via database `ON DELETE SET NULL`.
+
+---
+
+## 10. System Settings & Diagnostics
 
 Click **`⚙️  System Settings`** in the sidebar to review system configurations and connectivity.
 
@@ -414,7 +500,7 @@ Click **`⚙️  System Settings`** in the sidebar to review system configuratio
 
 ---
 
-## 9. Troubleshooting & Common Questions
+## 11. Troubleshooting & Common Questions
 
 ### Q1: The database status shows "● Database: Demo Mode". How do I connect to SQL Server?
 1. Ensure your SQL Server instance is started in Windows Services (`services.msc` -> `SQL Server (SQLEXPRESS)` or `MSSQLSERVER`).

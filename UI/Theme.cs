@@ -41,7 +41,7 @@ namespace Inventory_Management_System.UI
         public static readonly Color TextMuted     = ColorTranslator.FromHtml("#64748B"); // Slate 500
         public static readonly Color TextLight     = ColorTranslator.FromHtml("#F8FAFC"); // Slate 50
 
-        // Typography
+        // Typography (English / General UI)
         public static readonly Font FontHeadingLg  = new Font("Segoe UI", 16f, FontStyle.Bold);
         public static readonly Font FontHeadingMd  = new Font("Segoe UI", 12f, FontStyle.Bold);
         public static readonly Font FontHeadingSm  = new Font("Segoe UI", 10f, FontStyle.Bold);
@@ -50,6 +50,58 @@ namespace Inventory_Management_System.UI
         public static readonly Font FontBodyBold   = new Font("Segoe UI", 9.5f, FontStyle.Bold);
         public static readonly Font FontCaption    = new Font("Segoe UI", 8.5f, FontStyle.Regular);
         public static readonly Font FontCaptionBold= new Font("Segoe UI", 8.5f, FontStyle.Bold);
+
+        // Khmer Typography (Kantumruy Regular / Bold with automatic system resolution)
+        private static readonly string[] KhmerFontCandidates = new[]
+        {
+            "Kantumruy",
+            "Kantumruy Pro",
+            "Khmer OS Siemreap",
+            "Khmer OS Content",
+            "Khmer OS",
+            "Leelawadee UI",
+            "Segoe UI"
+        };
+
+        public static readonly string ResolvedKhmerFontName = ResolveKhmerFontName();
+
+        private static string ResolveKhmerFontName()
+        {
+            foreach (var name in KhmerFontCandidates)
+            {
+                try
+                {
+                    using var testFamily = new FontFamily(name);
+                    if (testFamily.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                        testFamily.Name.IndexOf("Kantumruy", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return testFamily.Name;
+                    }
+                }
+                catch { }
+            }
+            return "Segoe UI";
+        }
+
+        public static Font CreateKhmerFont(float size, FontStyle style = FontStyle.Regular)
+        {
+            try
+            {
+                return new Font(ResolvedKhmerFontName, size, style);
+            }
+            catch
+            {
+                return new Font("Segoe UI", size, style);
+            }
+        }
+
+        public static readonly Font FontKhmerHeadingLg = CreateKhmerFont(15f, FontStyle.Bold);
+        public static readonly Font FontKhmerHeadingMd = CreateKhmerFont(11.5f, FontStyle.Bold);
+        public static readonly Font FontKhmerHeadingSm = CreateKhmerFont(10.5f, FontStyle.Bold);
+        public static readonly Font FontKhmerBody      = CreateKhmerFont(10f, FontStyle.Regular);
+        public static readonly Font FontKhmerBodyBold  = CreateKhmerFont(10f, FontStyle.Bold);
+        public static readonly Font FontKhmerCaption   = CreateKhmerFont(9f, FontStyle.Regular);
+        public static readonly Font FontKhmerCaptionBold = CreateKhmerFont(9f, FontStyle.Bold);
 
         /// <summary>
         /// Applies modern flat styling to standard WinForms buttons.

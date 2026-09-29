@@ -132,9 +132,10 @@ namespace Inventory_Management_System.DataAccess
                     t.TransactionID, t.ProductID, p.ProductName, p.SKU,
                     t.TransactionType, t.Quantity, t.UnitPrice, t.ReferenceNo,
                     t.Notes, t.CreatedBy, ISNULL(u.FullName, 'System') AS CreatedByName,
-                    t.TransactionDate
+                    t.TransactionDate, ISNULL(c.CategoryName, 'General') AS CategoryName
                 FROM StockTransactions t
                 INNER JOIN Products p ON t.ProductID = p.ProductID
+                LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
                 LEFT JOIN Users u ON t.CreatedBy = u.UserID
                 ORDER BY t.TransactionDate DESC, t.TransactionID DESC;";
 
@@ -156,7 +157,8 @@ namespace Inventory_Management_System.DataAccess
                     Notes = row["Notes"] == DBNull.Value ? null : row["Notes"].ToString(),
                     CreatedBy = row["CreatedBy"] == DBNull.Value ? null : Convert.ToInt32(row["CreatedBy"]),
                     CreatedByName = row["CreatedByName"].ToString() ?? "System",
-                    TransactionDate = Convert.ToDateTime(row["TransactionDate"])
+                    TransactionDate = Convert.ToDateTime(row["TransactionDate"]),
+                    CategoryName = row["CategoryName"].ToString() ?? "General"
                 });
             }
 
@@ -223,6 +225,116 @@ namespace Inventory_Management_System.DataAccess
                     ProductCount = Convert.ToInt32(row["ProductCount"]),
                     TotalUnits = Convert.ToInt32(row["TotalUnits"]),
                     TotalValuation = Convert.ToDecimal(row["TotalValuation"])
+                });
+            }
+
+            return list;
+        }
+
+        public IEnumerable<TopSellingProductDto> GetTopSellingProducts(int limit = 5)
+        {
+            string sql = $@"
+                SELECT TOP ({limit})
+                    p.ProductID,
+                    p.SKU,
+                    p.ProductName,
+                    ISNULL(c.CategoryName, 'General') AS CategoryName,
+                    ISNULL(SUM(t.Quantity), 0) AS UnitsSold,
+                    ISNULL(SUM(t.Quantity * t.UnitPrice), 0.00) AS TotalRevenue
+                FROM StockTransactions t
+                INNER JOIN Products p ON t.ProductID = p.ProductID
+                LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
+                WHERE t.TransactionType = 'OUT'
+                GROUP BY p.ProductID, p.SKU, p.ProductName, c.CategoryName
+                ORDER BY UnitsSold DESC, TotalRevenue DESC;";
+
+            var dt = DatabaseHelper.ExecuteDataTable(sql);
+            var list = new List<TopSellingProductDto>();
+
+            foreach (DataRow row in dt.Rows)
+            {
+                list.Add(new TopSellingProductDto
+                {
+                    ProductID = Convert.ToInt32(row["ProductID"]),
+                    SKU = row["SKU"].ToString() ?? string.Empty,
+                    ProductName = row["ProductName"].ToString() ?? string.Empty,
+                    CategoryName = row["CategoryName"].ToString() ?? "General",
+                    UnitsSold = Convert.ToInt32(row["UnitsSold"]),
+                    TotalRevenue = Convert.ToDecimal(row["TotalRevenue"])
+                });
+            }
+
+            return list;
+        }
+
+        public IEnumerable<StockTransaction> GetFilteredTransactions(int? year, int? month, int? categoryId, string? movementType, string? searchQuery)
+        {
+            var sb = new System.Text.StringBuilder(@"
+                SELECT 
+                    t.TransactionID, t.ProductID, p.ProductName, p.SKU,
+                    t.TransactionType, t.Quantity, t.UnitPrice, t.ReferenceNo,
+                    t.Notes, t.CreatedBy, ISNULL(u.FullName, 'System') AS CreatedByName,
+                    t.TransactionDate, ISNULL(c.CategoryName, 'General') AS CategoryName
+                FROM StockTransactions t
+                INNER JOIN Products p ON t.ProductID = p.ProductID
+                LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
+                LEFT JOIN Users u ON t.CreatedBy = u.UserID
+                WHERE 1 = 1 ");
+
+            var parameters = new List<SqlParameter>();
+
+            if (year.HasValue && year.Value > 0)
+            {
+                sb.Append(" AND YEAR(t.TransactionDate) = @Year");
+                parameters.Add(new SqlParameter("@Year", SqlDbType.Int) { Value = year.Value });
+            }
+
+            if (month.HasValue && month.Value > 0)
+            {
+                sb.Append(" AND MONTH(t.TransactionDate) = @Month");
+                parameters.Add(new SqlParameter("@Month", SqlDbType.Int) { Value = month.Value });
+            }
+
+            if (categoryId.HasValue && categoryId.Value > 0)
+            {
+                sb.Append(" AND p.CategoryID = @CategoryID");
+                parameters.Add(new SqlParameter("@CategoryID", SqlDbType.Int) { Value = categoryId.Value });
+            }
+
+            if (!string.IsNullOrWhiteSpace(movementType) && !string.Equals(movementType, "ALL", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append(" AND t.TransactionType = @TxType");
+                parameters.Add(new SqlParameter("@TxType", SqlDbType.NVarChar, 10) { Value = movementType });
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                sb.Append(" AND (p.ProductName LIKE @Query OR p.SKU LIKE @Query OR t.ReferenceNo LIKE @Query)");
+                parameters.Add(new SqlParameter("@Query", SqlDbType.NVarChar, 100) { Value = $"%{searchQuery.Trim()}%" });
+            }
+
+            sb.Append(" ORDER BY t.TransactionDate DESC, t.TransactionID DESC;");
+
+            var dt = DatabaseHelper.ExecuteDataTable(sb.ToString(), CommandType.Text, parameters.ToArray());
+            var list = new List<StockTransaction>();
+
+            foreach (DataRow row in dt.Rows)
+            {
+                list.Add(new StockTransaction
+                {
+                    TransactionID = Convert.ToInt64(row["TransactionID"]),
+                    ProductID = Convert.ToInt32(row["ProductID"]),
+                    ProductName = row["ProductName"].ToString() ?? string.Empty,
+                    SKU = row["SKU"].ToString() ?? string.Empty,
+                    TransactionType = row["TransactionType"].ToString() ?? string.Empty,
+                    Quantity = Convert.ToInt32(row["Quantity"]),
+                    UnitPrice = Convert.ToDecimal(row["UnitPrice"]),
+                    ReferenceNo = row["ReferenceNo"] == DBNull.Value ? null : row["ReferenceNo"].ToString(),
+                    Notes = row["Notes"] == DBNull.Value ? null : row["Notes"].ToString(),
+                    CreatedBy = row["CreatedBy"] == DBNull.Value ? null : Convert.ToInt32(row["CreatedBy"]),
+                    CreatedByName = row["CreatedByName"].ToString() ?? "System",
+                    TransactionDate = Convert.ToDateTime(row["TransactionDate"]),
+                    CategoryName = row["CategoryName"].ToString() ?? "General"
                 });
             }
 

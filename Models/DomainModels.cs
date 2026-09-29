@@ -128,6 +128,7 @@ namespace Inventory_Management_System.Models
         public int? CreatedBy { get; set; }
         public string CreatedByName { get; set; } = string.Empty;
         public DateTime TransactionDate { get; set; } = DateTime.Now;
+        public string CategoryName { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -168,5 +169,35 @@ namespace Inventory_Management_System.Models
         public int ProductCount { get; set; }
         public int TotalUnits { get; set; }
         public decimal TotalValuation { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for top selling products ranking and executive chart display.
+    /// </summary>
+    public class TopSellingProductDto
+    {
+        public int ProductID { get; set; }
+        public string SKU { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public string CategoryName { get; set; } = string.Empty;
+        public int UnitsSold { get; set; }
+        public decimal TotalRevenue { get; set; }
+        public decimal UnitPrice => UnitsSold > 0 ? TotalRevenue / UnitsSold : 0;
+    }
+
+    /// <summary>
+    /// DTO for aggregated monthly reporting telemetry and period summaries.
+    /// </summary>
+    public class MonthlyReportSummaryDto
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public string MonthLabel { get; set; } = string.Empty;
+        public int TotalTransactions { get; set; }
+        public int TotalInUnits { get; set; }
+        public int TotalOutUnits { get; set; }
+        public int NetUnitsMovement => TotalInUnits - TotalOutUnits;
+        public decimal TotalSalesRevenue { get; set; }
+        public decimal TotalInflowCost { get; set; }
     }
 }

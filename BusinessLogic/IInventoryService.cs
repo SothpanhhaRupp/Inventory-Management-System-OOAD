@@ -20,6 +20,9 @@ namespace Inventory_Management_System.BusinessLogic
         IEnumerable<StockTransaction> GetRecentTransactions(int limit = 100);
         IEnumerable<MonthlyMovementDto> GetMonthlyMovements(int monthsBack = 6);
         IEnumerable<CategoryValuationDto> GetCategoryValuations();
+        IEnumerable<TopSellingProductDto> GetTopSellingProducts(int limit = 5);
+        IEnumerable<StockTransaction> GetFilteredTransactions(int? year, int? month, int? categoryId, string? movementType, string? searchQuery);
+        MonthlyReportSummaryDto GetMonthlyReportSummary(int? year, int? month, int? categoryId);
         ITelegramService TelegramService { get; }
 
         // Category Management Operations

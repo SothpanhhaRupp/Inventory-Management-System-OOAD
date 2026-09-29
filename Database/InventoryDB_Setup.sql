@@ -300,54 +300,66 @@ INSERT INTO Users (Username, PasswordHash, FullName, Role) VALUES
 ('sales', 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'Sales Representative', 'Sales Staff');
 GO
 
--- 4 Categories
+-- 6 Categories (Computer Systems, Components & Accessories)
 INSERT INTO Categories (CategoryName, Description) VALUES
-('Electronics', 'High-value consumer and enterprise electronic hardware and accessories'),
-('Beverages', 'Bottled, canned, and packaged drinks for wholesale distribution'),
-('Perishables', 'Fresh food items, dairy, and cold-chain inventory'),
-('Office Supplies', 'Stationery, paper, printer consumables, and general desk utilities');
+('Laptops & Ultrabooks', 'High-performance enterprise laptops, ultrabooks, and portable workstations'),
+('PC & Workstations', 'Custom gaming rigs, business desktop towers, and all-in-one workstations'),
+('Graphics Cards (GPU)', 'Dedicated graphics processing units, workstation cards, and visual accelerators'),
+('Memory & Storage', 'High-speed DDR5/DDR4 RAM modules, NVMe M.2 SSDs, and external storage'),
+('Peripherals & Mice', 'Ergonomic gaming mice, mechanical keyboards, webcams, and headsets'),
+('Laptop Accessories', 'USB-C docking stations, cooling pads, fast chargers, and laptop sleeves');
 GO
 
--- 2 Suppliers
+-- 2 Hardware Distributors / Suppliers
 INSERT INTO Suppliers (CompanyName, ContactPerson, Phone, Email, Address) VALUES
 ('TechDistro Global Inc.', 'Alex Rivera', '+1 (555) 234-5678', 'sales@techdistro.example.com', '100 Silicon Way, San Jose, CA 95134'),
-('FreshGoods Supply Co.', 'Sarah Jenkins', '+1 (555) 876-5432', 'orders@freshgoods.example.com', '450 Agricultural Pkwy, Fresno, CA 93706');
+('CyberCore Components Co.', 'Sarah Jenkins', '+1 (555) 876-5432', 'orders@cybercore.example.com', '450 Semiconductor Pkwy, Austin, TX 78701');
 GO
 
--- 8 Sample Products (deliberately set 2 items below ReorderLevel for alerts: Product 3 has 0, Product 4 has 3)
+-- 11 Computer Hardware & Accessories Products
+-- (Deliberately set 2 items below ReorderLevel: Product 4 has 0 stock, Product 5 has 3 stock)
 INSERT INTO Products (SKU, Barcode, ProductName, CategoryID, SupplierID, CostPrice, SellingPrice, CurrentStock, ReorderLevel) VALUES
--- Category 1: Electronics (Supplier 1)
-('ELEC-LAP-001', '8901234567890', 'Dell Latitude Pro 15.6" Laptop', 1, 1, 650.00, 899.99, 25, 10),
-('ELEC-MOU-002', '8901234567891', 'Logitech Wireless Ergonomic Mouse', 1, 1, 18.50, 34.99, 45, 15),
+-- Category 1: Laptops & Ultrabooks (Supplier 1)
+('LAP-ROG-001', '8901234567890', 'ASUS ROG Zephyrus G16 Gaming Laptop (i9, 32GB, 1TB)', 1, 1, 1450.00, 1899.99, 15, 5),
+('LAP-XPS-002', '8901234567891', 'Dell XPS 13 OLED Ultrabook (Ultra 7, 16GB, 512GB)', 1, 1, 890.00, 1199.99, 22, 8),
 
--- Category 2: Beverages (Supplier 2)
-('BEV-ORG-003',  '8901234567892', 'Organic Cold-Pressed Orange Juice (1L)', 2, 2, 2.10, 4.50, 0, 15), -- [TRIGGER: Out of Stock, 0 stock]
-('BEV-TEA-004',  '8901234567893', 'Matcha Green Tea Cans (12-Pack)', 2, 2, 14.00, 24.99, 3, 10),     -- [TRIGGER: Low Stock, 3 <= 10]
+-- Category 2: PC & Workstations (Supplier 1)
+('PC-MSI-003',  '8901234567892', 'MSI Aegis RS Gaming Desktop (Core i7, RTX 4070, 32GB)', 2, 1, 1200.00, 1599.99, 8, 4),
 
--- Category 3: Perishables (Supplier 2)
-('PER-CHE-005',  '8901234567894', 'Artisan Aged Cheddar Cheese Block (500g)', 3, 2, 5.20, 9.75, 30, 10),
-('PER-ALM-006',  '8901234567895', 'Raw Organic California Almonds (1kg)', 3, 2, 8.50, 15.00, 18, 10),
+-- Category 3: Graphics Cards (GPU) (Supplier 2)
+('GPU-NV-004',  '8901234567893', 'NVIDIA GeForce RTX 4080 Super 16GB GDDR6X', 3, 2, 820.00, 1049.99, 0, 6),     -- [TRIGGER: Out of Stock, 0 stock]
+('GPU-AMD-005', '8901234567894', 'AMD Radeon RX 7800 XT 16GB OC Edition', 3, 2, 420.00, 539.99, 3, 8),         -- [TRIGGER: Low Stock, 3 <= 8]
 
--- Category 4: Office Supplies (Supplier 1)
-('OFF-PAP-007',  '8901234567896', 'Multipurpose A4 Copy Paper (5-Ream Box)', 4, 1, 18.00, 29.50, 50, 20),
-('OFF-PEN-008',  '8901234567897', 'Retractable Gel Pens 0.7mm (Box of 24)', 4, 1, 6.20, 12.99, 35, 15);
+-- Category 4: Memory & Storage (Supplier 2)
+('RAM-COR-006', '8901234567895', 'Corsair Vengeance RGB DDR5 32GB (2x16GB) 6000MHz', 4, 2, 78.00, 119.99, 45, 15),
+('SSD-SAM-007', '8901234567896', 'Samsung 990 PRO 2TB NVMe M.2 PCIe 4.0 SSD', 4, 2, 125.00, 179.99, 35, 10),
+
+-- Category 5: Peripherals & Mice (Supplier 1)
+('MOU-LOG-008', '8901234567897', 'Logitech MX Master 3S Wireless Performance Mouse', 5, 1, 62.00, 99.99, 40, 12),
+('MOU-RAZ-009', '8901234567898', 'Razer Viper V2 Pro Ultra-Lightweight Wireless Mouse', 5, 1, 85.00, 139.99, 25, 10),
+
+-- Category 6: Laptop Accessories (Supplier 1)
+('ACC-ANK-010', '8901234567899', 'Anker 10-in-1 Dual 4K USB-C Laptop Docking Station', 6, 1, 75.00, 129.99, 30, 10),
+('ACC-CLG-011', '8901234567800', 'Cooler Master Notepal Ergonomic Laptop Cooling Pad', 6, 1, 18.50, 34.99, 50, 15);
 GO
 
--- 10 Sample Stock Transactions across recent dates to populate analytics charts
+-- 12 Sample Stock Transactions to populate analytics charts & audit history
 INSERT INTO StockTransactions (ProductID, TransactionType, Quantity, UnitPrice, ReferenceNo, Notes, CreatedBy, TransactionDate) VALUES
-(1, 'IN',  30, 650.00, 'PO-2026-001', 'Initial stock intake from TechDistro', 1, DATEADD(DAY, -45, GETDATE())),
-(1, 'OUT',  5, 899.99, 'SO-2026-010', 'Corporate workstation sales order', 2, DATEADD(DAY, -35, GETDATE())),
-(2, 'IN',  50,  18.50, 'PO-2026-002', 'Bulk accessories intake', 1, DATEADD(DAY, -40, GETDATE())),
-(2, 'OUT',  5,  34.99, 'SO-2026-015', 'Retail counter fulfillment', 2, DATEADD(DAY, -20, GETDATE())),
-(3, 'IN',  20,   2.10, 'PO-2026-003', 'Fresh beverage replenishment', 1, DATEADD(DAY, -25, GETDATE())),
-(3, 'OUT', 20,   4.50, 'SO-2026-022', 'Special event catering order - cleared stock', 2, DATEADD(DAY, -5, GETDATE())),
-(4, 'IN',  15,  14.00, 'PO-2026-004', 'Specialty tea inventory shipment', 1, DATEADD(DAY, -30, GETDATE())),
-(4, 'OUT', 12,  24.99, 'SO-2026-031', 'Wholesale store delivery', 2, DATEADD(DAY, -12, GETDATE())),
-(5, 'IN',  35,   5.20, 'PO-2026-005', 'Refrigerated cheese consignment', 1, DATEADD(DAY, -15, GETDATE())),
-(7, 'IN',  60,  18.00, 'PO-2026-006', 'Warehouse paper pallet intake', 1, DATEADD(DAY, -10, GETDATE())),
-(7, 'OUT', 10,  29.50, 'SO-2026-045', 'Internal school supplies order', 2, DATEADD(DAY, -2, GETDATE())),
-(8, 'IN',  40,   6.20, 'PO-2026-007', 'Stationery restock intake', 1, DATEADD(DAY, -8, GETDATE())),
-(8, 'OUT',  5,  12.99, 'SO-2026-050', 'Desk bundle sales package', 2, DATEADD(DAY, 0, GETDATE()));
+(1,  'IN',  18, 1450.00, 'PO-2026-001', 'Initial consignment of ASUS gaming laptops', 1, DATEADD(DAY, -45, GETDATE())),
+(1,  'OUT',  3, 1899.99, 'SO-2026-010', 'Corporate multimedia workstation purchase', 2, DATEADD(DAY, -35, GETDATE())),
+(2,  'IN',  25,  890.00, 'PO-2026-002', 'Dell ultrabook intake shipment', 1, DATEADD(DAY, -40, GETDATE())),
+(3,  'IN',  10, 1200.00, 'PO-2026-003', 'MSI prebuilt workstation stock intake', 1, DATEADD(DAY, -28, GETDATE())),
+(3,  'OUT',  2, 1599.99, 'SO-2026-018', 'Design studio desktop deployment', 2, DATEADD(DAY, -14, GETDATE())),
+(4,  'IN',  10,  820.00, 'PO-2026-004', 'NVIDIA GPU stock intake from CyberCore', 1, DATEADD(DAY, -25, GETDATE())),
+(4,  'OUT', 10, 1049.99, 'SO-2026-022', 'Bulk AI rendering lab order - depleted stock', 2, DATEADD(DAY, -5, GETDATE())),
+(5,  'IN',  15,  420.00, 'PO-2026-005', 'AMD GPU delivery consignment', 1, DATEADD(DAY, -30, GETDATE())),
+(5,  'OUT', 12,  539.99, 'SO-2026-031', 'Esports arena upgrade sales order', 2, DATEADD(DAY, -12, GETDATE())),
+(6,  'IN',  50,   78.00, 'PO-2026-006', 'DDR5 memory modules wholesale shipment', 1, DATEADD(DAY, -15, GETDATE())),
+(7,  'IN',  40,  125.00, 'PO-2026-007', 'Samsung NVMe SSD warehouse pallet intake', 1, DATEADD(DAY, -10, GETDATE())),
+(8,  'IN',  50,   62.00, 'PO-2026-008', 'Logitech performance mouse bulk intake', 1, DATEADD(DAY, -8, GETDATE())),
+(8,  'OUT', 10,   99.99, 'SO-2026-045', 'Enterprise ergonomics package fulfillment', 2, DATEADD(DAY, -2, GETDATE())),
+(10, 'IN',  35,   75.00, 'PO-2026-009', 'USB-C docking stations intake', 1, DATEADD(DAY, -6, GETDATE())),
+(11, 'IN',  55,   18.50, 'PO-2026-010', 'Laptop cooling pads shipment', 1, DATEADD(DAY, -4, GETDATE()));
 GO
 
 PRINT '================================================================';

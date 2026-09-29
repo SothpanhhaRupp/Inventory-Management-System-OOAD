@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using Microsoft.Data.SqlClient;
 using Inventory_Management_System.Models;
 
@@ -131,6 +132,163 @@ namespace Inventory_Management_System.DataAccess
             {
                 return DemoUsers;
             }
+        }
+
+        public bool UsernameExists(string username, int excludeUserId = 0)
+        {
+            if (string.IsNullOrWhiteSpace(username)) return false;
+
+            try
+            {
+                const string sql = @"
+                    SELECT COUNT(1) 
+                    FROM Users 
+                    WHERE LOWER(Username) = LOWER(@Username) AND UserID <> @ExcludeId;";
+
+                var p = new[]
+                {
+                    new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = username.Trim() },
+                    new SqlParameter("@ExcludeId", SqlDbType.Int) { Value = excludeUserId }
+                };
+
+                int count = Convert.ToInt32(DatabaseHelper.ExecuteScalar(sql, CommandType.Text, p));
+                return count > 0;
+            }
+            catch
+            {
+                return DemoUsers.Any(u => string.Equals(u.Username, username.Trim(), StringComparison.OrdinalIgnoreCase) && u.UserID != excludeUserId);
+            }
+        }
+
+        public bool AddUser(User user, out string? errorMessage)
+        {
+            errorMessage = null;
+            try
+            {
+                const string sql = @"
+                    INSERT INTO Users (Username, PasswordHash, FullName, Role, CreatedAt)
+                    VALUES (@Username, @PasswordHash, @FullName, @Role, @CreatedAt);
+                    SELECT SCOPE_IDENTITY();";
+
+                var p = new[]
+                {
+                    new SqlParameter("@Username", SqlDbType.NVarChar, 50) { Value = user.Username.Trim() },
+                    new SqlParameter("@PasswordHash", SqlDbType.NVarChar, 255) { Value = user.PasswordHash },
+                    new SqlParameter("@FullName", SqlDbType.NVarChar, 100) { Value = user.FullName.Trim() },
+                    new SqlParameter("@Role", SqlDbType.NVarChar, 20) { Value = user.Role },
+                    new SqlParameter("@CreatedAt", SqlDbType.DateTime) { Value = user.CreatedAt == default ? DateTime.Now : user.CreatedAt }
+                };
+
+                object? result = DatabaseHelper.ExecuteScalar(sql, CommandType.Text, p);
+                if (result != null && int.TryParse(result.ToString(), out int newId))
+                {
+                    user.UserID = newId;
+                }
+                else
+                {
+                    int maxId = DemoUsers.Count > 0 ? DemoUsers.Max(u => u.UserID) : 0;
+                    user.UserID = maxId + 1;
+                }
+
+                // Synchronize demo cache as well
+                if (!DemoUsers.Any(u => u.UserID == user.UserID))
+                {
+                    DemoUsers.Add(user);
+                }
+                return true;
+            }
+            catch
+            {
+                int maxId = DemoUsers.Count > 0 ? DemoUsers.Max(u => u.UserID) : 0;
+                user.UserID = maxId + 1;
+                DemoUsers.Add(user);
+                errorMessage = null; // Successfully saved to in-memory fallback
+                return true;
+            }
+        }
+
+        public bool UpdateUser(User user, out string? errorMessage)
+        {
+            errorMessage = null;
+            try
+            {
+                const string sql = @"
+                    UPDATE Users 
+                    SET FullName = @FullName, Role = @Role
+                    WHERE UserID = @UserID;";
+
+                var p = new[]
+                {
+                    new SqlParameter("@FullName", SqlDbType.NVarChar, 100) { Value = user.FullName.Trim() },
+                    new SqlParameter("@Role", SqlDbType.NVarChar, 20) { Value = user.Role },
+                    new SqlParameter("@UserID", SqlDbType.Int) { Value = user.UserID }
+                };
+
+                DatabaseHelper.ExecuteNonQuery(sql, CommandType.Text, p);
+            }
+            catch
+            {
+                // Fallback to in-memory
+            }
+
+            var demo = DemoUsers.Find(u => u.UserID == user.UserID);
+            if (demo != null)
+            {
+                demo.FullName = user.FullName;
+                demo.Role = user.Role;
+            }
+
+            return true;
+        }
+
+        public bool UpdatePassword(int userId, string passwordHash, out string? errorMessage)
+        {
+            errorMessage = null;
+            try
+            {
+                const string sql = @"
+                    UPDATE Users 
+                    SET PasswordHash = @PasswordHash
+                    WHERE UserID = @UserID;";
+
+                var p = new[]
+                {
+                    new SqlParameter("@PasswordHash", SqlDbType.NVarChar, 255) { Value = passwordHash },
+                    new SqlParameter("@UserID", SqlDbType.Int) { Value = userId }
+                };
+
+                DatabaseHelper.ExecuteNonQuery(sql, CommandType.Text, p);
+            }
+            catch
+            {
+                // Fallback
+            }
+
+            var demo = DemoUsers.Find(u => u.UserID == userId);
+            if (demo != null)
+            {
+                demo.PasswordHash = passwordHash;
+            }
+
+            return true;
+        }
+
+        public bool DeleteUser(int userId, out string? errorMessage)
+        {
+            errorMessage = null;
+            try
+            {
+                const string sql = @"DELETE FROM Users WHERE UserID = @UserID;";
+                var p = new[] { new SqlParameter("@UserID", SqlDbType.Int) { Value = userId } };
+                DatabaseHelper.ExecuteNonQuery(sql, CommandType.Text, p);
+            }
+            catch
+            {
+                // Fallback
+            }
+
+            DemoUsers.RemoveAll(u => u.UserID == userId);
+            return true;
         }
 
         private static User MapRowToUser(DataRow row)

@@ -305,6 +305,82 @@ namespace Inventory_Management_System.BusinessLogic
             return GetFallbackCategoryValuations();
         }
 
+        public IEnumerable<TopSellingProductDto> GetTopSellingProducts(int limit = 5)
+        {
+            try
+            {
+                var list = _transactionRepository.GetTopSellingProducts(limit).ToList();
+                if (list.Count > 0) return list;
+            }
+            catch { /* fallback on connection failure */ }
+
+            return GetFallbackTopSellingProducts(limit);
+        }
+
+        public IEnumerable<StockTransaction> GetFilteredTransactions(int? year, int? month, int? categoryId, string? movementType, string? searchQuery)
+        {
+            try
+            {
+                return _transactionRepository.GetFilteredTransactions(year, month, categoryId, movementType, searchQuery);
+            }
+            catch
+            {
+                // Fallback in-memory filter
+                var all = GetRecentTransactions(300);
+                if (year.HasValue && year.Value > 0)
+                    all = all.Where(t => t.TransactionDate.Year == year.Value);
+                if (month.HasValue && month.Value > 0)
+                    all = all.Where(t => t.TransactionDate.Month == month.Value);
+                if (!string.IsNullOrWhiteSpace(movementType) && !string.Equals(movementType, "ALL", StringComparison.OrdinalIgnoreCase))
+                    all = all.Where(t => string.Equals(t.TransactionType, movementType, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(searchQuery))
+                {
+                    string q = searchQuery.Trim().ToLowerInvariant();
+                    all = all.Where(t => t.ProductName.ToLowerInvariant().Contains(q) || t.SKU.ToLowerInvariant().Contains(q) || (t.ReferenceNo != null && t.ReferenceNo.ToLowerInvariant().Contains(q)));
+                }
+                return all.ToList();
+            }
+        }
+
+        public MonthlyReportSummaryDto GetMonthlyReportSummary(int? year, int? month, int? categoryId)
+        {
+            var txs = GetFilteredTransactions(year, month, categoryId, null, null).ToList();
+
+            string label = (month.HasValue && month.Value >= 1 && month.Value <= 12)
+                ? new DateTime(year ?? DateTime.Now.Year, month.Value, 1).ToString("MMMM yyyy")
+                : (year.HasValue ? $"Year {year.Value}" : "All Historical Data");
+
+            return new MonthlyReportSummaryDto
+            {
+                Year = year ?? DateTime.Now.Year,
+                Month = month ?? DateTime.Now.Month,
+                MonthLabel = label,
+                TotalTransactions = txs.Count,
+                TotalInUnits = txs.Where(t => t.TransactionType == "IN").Sum(t => t.Quantity),
+                TotalOutUnits = txs.Where(t => t.TransactionType == "OUT").Sum(t => t.Quantity),
+                TotalSalesRevenue = txs.Where(t => t.TransactionType == "OUT").Sum(t => t.TotalAmount),
+                TotalInflowCost = txs.Where(t => t.TransactionType == "IN").Sum(t => t.TotalAmount)
+            };
+        }
+
+        private IEnumerable<TopSellingProductDto> GetFallbackTopSellingProducts(int limit)
+        {
+            var products = GetAllProducts().ToList();
+            return products
+                .OrderByDescending(p => p.CurrentStock)
+                .Take(limit)
+                .Select(p => new TopSellingProductDto
+                {
+                    ProductID = p.ProductID,
+                    SKU = p.SKU,
+                    ProductName = p.ProductName,
+                    CategoryName = "General",
+                    UnitsSold = Math.Max(5, 50 - p.CurrentStock),
+                    TotalRevenue = Math.Max(5, 50 - p.CurrentStock) * p.SellingPrice
+                })
+                .OrderByDescending(t => t.UnitsSold);
+        }
+
         #region Category Management Operations
 
         public IEnumerable<Category> GetAllCategories()
@@ -387,13 +463,13 @@ namespace Inventory_Management_System.BusinessLogic
         {
             return new DashboardMetrics
             {
-                TotalInventoryCount = 173,
-                TotalAssetValuation = 24890.50m,
-                LowStockProductCount = 2,
+                TotalInventoryCount = 273,
+                TotalAssetValuation = 67855.00m,
+                LowStockProductCount = 1,
                 OutOfStockProductCount = 1,
-                TodayStockIn = 40,
-                TodayStockOut = 5,
-                TotalProductCount = 8
+                TodayStockIn = 55,
+                TodayStockOut = 10,
+                TotalProductCount = 11
             };
         }
 
@@ -401,14 +477,17 @@ namespace Inventory_Management_System.BusinessLogic
         {
             return new List<Product>
             {
-                new Product { ProductID = 1, SKU = "ELEC-LAP-001", Barcode = "8901234567890", ProductName = "Dell Latitude Pro 15.6\" Laptop", CategoryID = 1, CategoryName = "Electronics", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 650.00m, SellingPrice = 899.99m, CurrentStock = 25, ReorderLevel = 10 },
-                new Product { ProductID = 2, SKU = "ELEC-MOU-002", Barcode = "8901234567891", ProductName = "Logitech Wireless Ergonomic Mouse", CategoryID = 1, CategoryName = "Electronics", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 18.50m, SellingPrice = 34.99m, CurrentStock = 45, ReorderLevel = 15 },
-                new Product { ProductID = 3, SKU = "BEV-ORG-003", Barcode = "8901234567892", ProductName = "Organic Cold-Pressed Orange Juice (1L)", CategoryID = 2, CategoryName = "Beverages", SupplierID = 2, SupplierName = "FreshGoods Supply Co.", CostPrice = 2.10m, SellingPrice = 4.50m, CurrentStock = 0, ReorderLevel = 15 },
-                new Product { ProductID = 4, SKU = "BEV-TEA-004", Barcode = "8901234567893", ProductName = "Matcha Green Tea Cans (12-Pack)", CategoryID = 2, CategoryName = "Beverages", SupplierID = 2, SupplierName = "FreshGoods Supply Co.", CostPrice = 14.00m, SellingPrice = 24.99m, CurrentStock = 3, ReorderLevel = 10 },
-                new Product { ProductID = 5, SKU = "PER-CHE-005", Barcode = "8901234567894", ProductName = "Artisan Aged Cheddar Cheese Block (500g)", CategoryID = 3, CategoryName = "Perishables", SupplierID = 2, SupplierName = "FreshGoods Supply Co.", CostPrice = 5.20m, SellingPrice = 9.75m, CurrentStock = 30, ReorderLevel = 10 },
-                new Product { ProductID = 6, SKU = "PER-ALM-006", Barcode = "8901234567895", ProductName = "Raw Organic California Almonds (1kg)", CategoryID = 3, CategoryName = "Perishables", SupplierID = 2, SupplierName = "FreshGoods Supply Co.", CostPrice = 8.50m, SellingPrice = 15.00m, CurrentStock = 18, ReorderLevel = 10 },
-                new Product { ProductID = 7, SKU = "OFF-PAP-007", Barcode = "8901234567896", ProductName = "Multipurpose A4 Copy Paper (5-Ream Box)", CategoryID = 4, CategoryName = "Office Supplies", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 18.00m, SellingPrice = 29.50m, CurrentStock = 50, ReorderLevel = 20 },
-                new Product { ProductID = 8, SKU = "OFF-PEN-008", Barcode = "8901234567897", ProductName = "Retractable Gel Pens 0.7mm (Box of 24)", CategoryID = 4, CategoryName = "Office Supplies", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 6.20m, SellingPrice = 12.99m, CurrentStock = 35, ReorderLevel = 15 }
+                new Product { ProductID = 1, SKU = "LAP-ROG-001", Barcode = "8901234567890", ProductName = "ASUS ROG Zephyrus G16 Gaming Laptop (i9, 32GB, 1TB)", CategoryID = 1, CategoryName = "Laptops & Ultrabooks", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 1450.00m, SellingPrice = 1899.99m, CurrentStock = 15, ReorderLevel = 5 },
+                new Product { ProductID = 2, SKU = "LAP-XPS-002", Barcode = "8901234567891", ProductName = "Dell XPS 13 OLED Ultrabook (Ultra 7, 16GB, 512GB)", CategoryID = 1, CategoryName = "Laptops & Ultrabooks", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 890.00m, SellingPrice = 1199.99m, CurrentStock = 22, ReorderLevel = 8 },
+                new Product { ProductID = 3, SKU = "PC-MSI-003",  Barcode = "8901234567892", ProductName = "MSI Aegis RS Gaming Desktop (Core i7, RTX 4070, 32GB)", CategoryID = 2, CategoryName = "PC & Workstations", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 1200.00m, SellingPrice = 1599.99m, CurrentStock = 8, ReorderLevel = 4 },
+                new Product { ProductID = 4, SKU = "GPU-NV-004",  Barcode = "8901234567893", ProductName = "NVIDIA GeForce RTX 4080 Super 16GB GDDR6X", CategoryID = 3, CategoryName = "Graphics Cards (GPU)", SupplierID = 2, SupplierName = "CyberCore Components Co.", CostPrice = 820.00m, SellingPrice = 1049.99m, CurrentStock = 0, ReorderLevel = 6 },
+                new Product { ProductID = 5, SKU = "GPU-AMD-005", Barcode = "8901234567894", ProductName = "AMD Radeon RX 7800 XT 16GB OC Edition", CategoryID = 3, CategoryName = "Graphics Cards (GPU)", SupplierID = 2, SupplierName = "CyberCore Components Co.", CostPrice = 420.00m, SellingPrice = 539.99m, CurrentStock = 3, ReorderLevel = 8 },
+                new Product { ProductID = 6, SKU = "RAM-COR-006", Barcode = "8901234567895", ProductName = "Corsair Vengeance RGB DDR5 32GB (2x16GB) 6000MHz", CategoryID = 4, CategoryName = "Memory & Storage", SupplierID = 2, SupplierName = "CyberCore Components Co.", CostPrice = 78.00m, SellingPrice = 119.99m, CurrentStock = 45, ReorderLevel = 15 },
+                new Product { ProductID = 7, SKU = "SSD-SAM-007", Barcode = "8901234567896", ProductName = "Samsung 990 PRO 2TB NVMe M.2 PCIe 4.0 SSD", CategoryID = 4, CategoryName = "Memory & Storage", SupplierID = 2, SupplierName = "CyberCore Components Co.", CostPrice = 125.00m, SellingPrice = 179.99m, CurrentStock = 35, ReorderLevel = 10 },
+                new Product { ProductID = 8, SKU = "MOU-LOG-008", Barcode = "8901234567897", ProductName = "Logitech MX Master 3S Wireless Performance Mouse", CategoryID = 5, CategoryName = "Peripherals & Mice", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 62.00m, SellingPrice = 99.99m, CurrentStock = 40, ReorderLevel = 12 },
+                new Product { ProductID = 9, SKU = "MOU-RAZ-009", Barcode = "8901234567898", ProductName = "Razer Viper V2 Pro Ultra-Lightweight Wireless Mouse", CategoryID = 5, CategoryName = "Peripherals & Mice", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 85.00m, SellingPrice = 139.99m, CurrentStock = 25, ReorderLevel = 10 },
+                new Product { ProductID = 10, SKU = "ACC-ANK-010", Barcode = "8901234567899", ProductName = "Anker 10-in-1 Dual 4K USB-C Laptop Docking Station", CategoryID = 6, CategoryName = "Laptop Accessories", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 75.00m, SellingPrice = 129.99m, CurrentStock = 30, ReorderLevel = 10 },
+                new Product { ProductID = 11, SKU = "ACC-CLG-011", Barcode = "8901234567800", ProductName = "Cooler Master Notepal Ergonomic Laptop Cooling Pad", CategoryID = 6, CategoryName = "Laptop Accessories", SupplierID = 1, SupplierName = "TechDistro Global Inc.", CostPrice = 18.50m, SellingPrice = 34.99m, CurrentStock = 50, ReorderLevel = 15 }
             };
         }
 
@@ -429,10 +508,12 @@ namespace Inventory_Management_System.BusinessLogic
         {
             return new List<CategoryValuationDto>
             {
-                new CategoryValuationDto { CategoryID = 1, CategoryName = "Electronics", ProductCount = 2, TotalUnits = 70, TotalValuation = 17082.50m },
-                new CategoryValuationDto { CategoryID = 4, CategoryName = "Office Supplies", ProductCount = 2, TotalUnits = 85, TotalValuation = 1117.00m },
-                new CategoryValuationDto { CategoryID = 3, CategoryName = "Perishables", ProductCount = 2, TotalUnits = 48, TotalValuation = 309.00m },
-                new CategoryValuationDto { CategoryID = 2, CategoryName = "Beverages", ProductCount = 2, TotalUnits = 3, TotalValuation = 42.00m }
+                new CategoryValuationDto { CategoryID = 1, CategoryName = "Laptops & Ultrabooks", ProductCount = 2, TotalUnits = 37, TotalValuation = 41330.00m },
+                new CategoryValuationDto { CategoryID = 2, CategoryName = "PC & Workstations", ProductCount = 1, TotalUnits = 8, TotalValuation = 9600.00m },
+                new CategoryValuationDto { CategoryID = 4, CategoryName = "Memory & Storage", ProductCount = 2, TotalUnits = 80, TotalValuation = 7885.00m },
+                new CategoryValuationDto { CategoryID = 5, CategoryName = "Peripherals & Mice", ProductCount = 2, TotalUnits = 65, TotalValuation = 4605.00m },
+                new CategoryValuationDto { CategoryID = 6, CategoryName = "Laptop Accessories", ProductCount = 2, TotalUnits = 80, TotalValuation = 3175.00m },
+                new CategoryValuationDto { CategoryID = 3, CategoryName = "Graphics Cards (GPU)", ProductCount = 2, TotalUnits = 3, TotalValuation = 1260.00m }
             };
         }
 
@@ -440,14 +521,14 @@ namespace Inventory_Management_System.BusinessLogic
         {
             return new List<StockTransaction>
             {
-                new StockTransaction { TransactionID = 101, ProductID = 1, SKU = "ELEC-LAP-001", ProductName = "Dell Latitude Pro 15.6\" Laptop", TransactionType = "IN", Quantity = 30, UnitPrice = 650.00m, ReferenceNo = "PO-2026-001", Notes = "Bulk intake", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-45) },
-                new StockTransaction { TransactionID = 102, ProductID = 1, SKU = "ELEC-LAP-001", ProductName = "Dell Latitude Pro 15.6\" Laptop", TransactionType = "OUT", Quantity = 5, UnitPrice = 899.99m, ReferenceNo = "SO-2026-010", Notes = "Workstation sale", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-35) },
-                new StockTransaction { TransactionID = 103, ProductID = 2, SKU = "ELEC-MOU-002", ProductName = "Logitech Wireless Ergonomic Mouse", TransactionType = "IN", Quantity = 50, UnitPrice = 18.50m, ReferenceNo = "PO-2026-002", Notes = "Accessories shipment", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-40) },
-                new StockTransaction { TransactionID = 104, ProductID = 3, SKU = "BEV-ORG-003", ProductName = "Organic Cold-Pressed Orange Juice (1L)", TransactionType = "OUT", Quantity = 20, UnitPrice = 4.50m, ReferenceNo = "SO-2026-022", Notes = "Catering order - depleted", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-5) },
-                new StockTransaction { TransactionID = 105, ProductID = 4, SKU = "BEV-TEA-004", ProductName = "Matcha Green Tea Cans (12-Pack)", TransactionType = "OUT", Quantity = 12, UnitPrice = 24.99m, ReferenceNo = "SO-2026-031", Notes = "Wholesale dispatch", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-12) },
-                new StockTransaction { TransactionID = 106, ProductID = 7, SKU = "OFF-PAP-007", ProductName = "Multipurpose A4 Copy Paper (5-Ream Box)", TransactionType = "IN", Quantity = 60, UnitPrice = 18.00m, ReferenceNo = "PO-2026-006", Notes = "Pallet replenishment", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-10) },
-                new StockTransaction { TransactionID = 107, ProductID = 7, SKU = "OFF-PAP-007", ProductName = "Multipurpose A4 Copy Paper (5-Ream Box)", TransactionType = "OUT", Quantity = 10, UnitPrice = 29.50m, ReferenceNo = "SO-2026-045", Notes = "Branch transfer", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-2) },
-                new StockTransaction { TransactionID = 108, ProductID = 8, SKU = "OFF-PEN-008", ProductName = "Retractable Gel Pens 0.7mm (Box of 24)", TransactionType = "IN", Quantity = 40, UnitPrice = 6.20m, ReferenceNo = "PO-2026-007", Notes = "Stationery restock", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-8) }
+                new StockTransaction { TransactionID = 101, ProductID = 1, SKU = "LAP-ROG-001", ProductName = "ASUS ROG Zephyrus G16 Gaming Laptop (i9, 32GB, 1TB)", TransactionType = "IN", Quantity = 18, UnitPrice = 1450.00m, ReferenceNo = "PO-2026-001", Notes = "Initial intake", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-45) },
+                new StockTransaction { TransactionID = 102, ProductID = 1, SKU = "LAP-ROG-001", ProductName = "ASUS ROG Zephyrus G16 Gaming Laptop (i9, 32GB, 1TB)", TransactionType = "OUT", Quantity = 3, UnitPrice = 1899.99m, ReferenceNo = "SO-2026-010", Notes = "Multimedia client purchase", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-35) },
+                new StockTransaction { TransactionID = 103, ProductID = 4, SKU = "GPU-NV-004", ProductName = "NVIDIA GeForce RTX 4080 Super 16GB GDDR6X", TransactionType = "IN", Quantity = 10, UnitPrice = 820.00m, ReferenceNo = "PO-2026-004", Notes = "GPU stock intake", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-25) },
+                new StockTransaction { TransactionID = 104, ProductID = 4, SKU = "GPU-NV-004", ProductName = "NVIDIA GeForce RTX 4080 Super 16GB GDDR6X", TransactionType = "OUT", Quantity = 10, UnitPrice = 1049.99m, ReferenceNo = "SO-2026-022", Notes = "AI lab order - cleared stock", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-5) },
+                new StockTransaction { TransactionID = 105, ProductID = 5, SKU = "GPU-AMD-005", ProductName = "AMD Radeon RX 7800 XT 16GB OC Edition", TransactionType = "OUT", Quantity = 12, UnitPrice = 539.99m, ReferenceNo = "SO-2026-031", Notes = "Esports arena order", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-12) },
+                new StockTransaction { TransactionID = 106, ProductID = 6, SKU = "RAM-COR-006", ProductName = "Corsair Vengeance RGB DDR5 32GB (2x16GB) 6000MHz", TransactionType = "IN", Quantity = 50, UnitPrice = 78.00m, ReferenceNo = "PO-2026-006", Notes = "DDR5 wholesale shipment", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-15) },
+                new StockTransaction { TransactionID = 107, ProductID = 8, SKU = "MOU-LOG-008", ProductName = "Logitech MX Master 3S Wireless Performance Mouse", TransactionType = "OUT", Quantity = 10, UnitPrice = 99.99m, ReferenceNo = "SO-2026-045", Notes = "Corporate ergonomics order", CreatedByName = "Warehouse Operator", TransactionDate = DateTime.Now.AddDays(-2) },
+                new StockTransaction { TransactionID = 108, ProductID = 11, SKU = "ACC-CLG-011", ProductName = "Cooler Master Notepal Ergonomic Laptop Cooling Pad", TransactionType = "IN", Quantity = 55, UnitPrice = 18.50m, ReferenceNo = "PO-2026-010", Notes = "Cooling pads replenishment", CreatedByName = "System Administrator", TransactionDate = DateTime.Now.AddDays(-4) }
             };
         }
 
@@ -455,10 +536,12 @@ namespace Inventory_Management_System.BusinessLogic
         {
             return new List<Category>
             {
-                new Category { CategoryID = 1, CategoryName = "Electronics", Description = "High-value consumer and enterprise electronic hardware and accessories", ProductCount = 2 },
-                new Category { CategoryID = 2, CategoryName = "Beverages", Description = "Bottled, canned, and packaged drinks for wholesale distribution", ProductCount = 2 },
-                new Category { CategoryID = 3, CategoryName = "Perishables", Description = "Fresh food items, dairy, and cold-chain inventory", ProductCount = 2 },
-                new Category { CategoryID = 4, CategoryName = "Office Supplies", Description = "Stationery, paper, printer consumables, and general desk utilities", ProductCount = 2 }
+                new Category { CategoryID = 1, CategoryName = "Laptops & Ultrabooks", Description = "High-performance enterprise laptops, ultrabooks, and portable workstations", ProductCount = 2 },
+                new Category { CategoryID = 2, CategoryName = "PC & Workstations", Description = "Custom gaming rigs, business desktop towers, and all-in-one workstations", ProductCount = 1 },
+                new Category { CategoryID = 3, CategoryName = "Graphics Cards (GPU)", Description = "Dedicated graphics processing units, workstation cards, and visual accelerators", ProductCount = 2 },
+                new Category { CategoryID = 4, CategoryName = "Memory & Storage", Description = "High-speed DDR5/DDR4 RAM modules, NVMe M.2 SSDs, and external storage", ProductCount = 2 },
+                new Category { CategoryID = 5, CategoryName = "Peripherals & Mice", Description = "Ergonomic gaming mice, mechanical keyboards, webcams, and headsets", ProductCount = 2 },
+                new Category { CategoryID = 6, CategoryName = "Laptop Accessories", Description = "USB-C docking stations, cooling pads, fast chargers, and laptop sleeves", ProductCount = 2 }
             };
         }
 

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -11,6 +13,7 @@ namespace Inventory_Management_System.BusinessLogic
     /// <summary>
     /// Service implementing secure SHA-256 user authentication and
     /// encrypted / tamper-resistant 7-day Remember-Me persistence.
+    /// Also provides administrative user lifecycle and RBAC account provisioning.
     /// </summary>
     public class AuthService : IAuthService
     {
@@ -129,6 +132,151 @@ namespace Inventory_Management_System.BusinessLogic
         {
             byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
             return Convert.ToHexString(bytes).ToLowerInvariant();
+        }
+
+        public IEnumerable<User> GetAllUsers()
+        {
+            return _userRepository.GetAll();
+        }
+
+        public bool CreateUser(User user, string plainPassword, out string? errorMessage)
+        {
+            errorMessage = null;
+            if (user == null)
+            {
+                errorMessage = "User information cannot be null.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.Username))
+            {
+                errorMessage = "Username is required.";
+                return false;
+            }
+
+            if (user.Username.Trim().Length < 3)
+            {
+                errorMessage = "Username must be at least 3 characters long.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.FullName))
+            {
+                errorMessage = "Full Name is required.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(plainPassword))
+            {
+                errorMessage = "Password is required for new user accounts.";
+                return false;
+            }
+
+            if (plainPassword.Length < 3)
+            {
+                errorMessage = "Password must be at least 3 characters long.";
+                return false;
+            }
+
+            if (_userRepository.UsernameExists(user.Username))
+            {
+                errorMessage = $"The username '{user.Username.Trim()}' is already taken. Please choose another username.";
+                return false;
+            }
+
+            // Normalize role
+            string role = user.Role?.Trim() ?? "Staff";
+            if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(role, "Sales Staff", StringComparison.OrdinalIgnoreCase))
+            {
+                role = "Staff";
+            }
+            user.Role = role;
+            user.PasswordHash = HashPassword(plainPassword);
+            user.CreatedAt = DateTime.Now;
+
+            return _userRepository.AddUser(user, out errorMessage);
+        }
+
+        public bool UpdateUser(User user, string? newPlainPassword, out string? errorMessage)
+        {
+            errorMessage = null;
+            if (user == null)
+            {
+                errorMessage = "User cannot be null.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.FullName))
+            {
+                errorMessage = "Full Name is required.";
+                return false;
+            }
+
+            // Check if username changed and collides
+            if (_userRepository.UsernameExists(user.Username, user.UserID))
+            {
+                errorMessage = $"The username '{user.Username.Trim()}' is already taken by another account.";
+                return false;
+            }
+
+            // Normalize role
+            string role = user.Role?.Trim() ?? "Staff";
+            if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(role, "Sales Staff", StringComparison.OrdinalIgnoreCase))
+            {
+                role = "Staff";
+            }
+            user.Role = role;
+
+            bool success = _userRepository.UpdateUser(user, out errorMessage);
+            if (!success) return false;
+
+            if (!string.IsNullOrWhiteSpace(newPlainPassword))
+            {
+                if (newPlainPassword.Length < 3)
+                {
+                    errorMessage = "Password must be at least 3 characters long.";
+                    return false;
+                }
+                string newHash = HashPassword(newPlainPassword);
+                return _userRepository.UpdatePassword(user.UserID, newHash, out errorMessage);
+            }
+
+            return true;
+        }
+
+        public bool DeleteUser(int userId, int currentAdminUserId, out string? errorMessage)
+        {
+            errorMessage = null;
+
+            if (userId == currentAdminUserId)
+            {
+                errorMessage = "Security Restriction: You cannot delete your own currently logged-in administrator account.";
+                return false;
+            }
+
+            var allUsers = _userRepository.GetAll().ToList();
+            var target = allUsers.FirstOrDefault(u => u.UserID == userId);
+            if (target == null)
+            {
+                errorMessage = "Selected user could not be found in the system.";
+                return false;
+            }
+
+            if (target.IsAdmin)
+            {
+                int adminCount = allUsers.Count(u => u.IsAdmin);
+                if (adminCount <= 1)
+                {
+                    errorMessage = "Protection Rule: Cannot delete the last remaining Administrator account. The system requires at least one Admin.";
+                    return false;
+                }
+            }
+
+            return _userRepository.DeleteUser(userId, out errorMessage);
         }
 
         private void SaveRememberMeSession(User user)

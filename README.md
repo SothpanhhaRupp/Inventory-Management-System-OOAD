@@ -6,6 +6,7 @@ A modern, enterprise-grade Inventory Control & Stock Intelligence desktop applic
 
 ## 📖 Documentation & Guides
 - **[USER_MANUAL.md](file:///c:/Users/Panha/source/repos/Inventory%20Management%20System/Inventory%20Management%20System/USER_MANUAL.md)**: **Complete Step-by-Step User Manual & Operations Guide** (Database setup, login, dashboard, product catalog, stock movements, and audits).
+- **[SYSTEM_GUIDE_AND_BUSINESS_BENEFITS_KH.md](file:///c:/Users/Panha/source/repos/Inventory%20Management%20System/Inventory%20Management%20System/Docs/SYSTEM_GUIDE_AND_BUSINESS_BENEFITS_KH.md)**: **សៀវភៅណែនាំជាភាសាខ្មែរ អត្ថប្រយោជន៍ និងរបៀបប្រើប្រាស់ប្រព័ន្ធ** (Khmer User Guide & Business Value).
 - **[OOAD_Project_Report.md](file:///c:/Users/Panha/source/repos/Inventory%20Management%20System/Inventory%20Management%20System/Docs/OOAD_Project_Report.md)**: Full Object-Oriented Analysis & Design academic report.
 - **[Slide_Deck_Presentation.md](file:///c:/Users/Panha/source/repos/Inventory%20Management%20System/Inventory%20Management%20System/Docs/Slide_Deck_Presentation.md)**: 15-Slide project presentation and defense deck.
 - **[README.txt](file:///c:/Users/Panha/source/repos/Inventory%20Management%20System/Inventory%20Management%20System/Docs/README.txt)**: Submission summary and architecture notes.

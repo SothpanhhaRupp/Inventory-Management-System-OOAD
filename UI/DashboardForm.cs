@@ -62,6 +62,8 @@ namespace Inventory_Management_System.UI
         private Panel _panelMovementsView = null!;
         private Panel _panelAuditsView = null!;
         private Panel _panelCategoriesView = null!;
+        private Panel _panelReportsView = null!;
+        private Panel _panelUsersView = null!;
         private Panel _panelSettingsView = null!;
 
         // Sidebar Navigation Buttons
@@ -74,6 +76,7 @@ namespace Inventory_Management_System.UI
         private KpiCard _cardNetMovement = null!;
         private CartesianChart _chartMovements = null!;
         private PieChart _chartValuation = null!;
+        private CartesianChart _chartTopSelling = null!;
         private DataGridView _gridUrgentStock = null!;
 
         // 2. Product Catalog View Controls
@@ -102,6 +105,29 @@ namespace Inventory_Management_System.UI
         private List<Category> _allCachedCategories = new();
         private Label _lblCategorySummary = null!;
 
+        // 7. Monthly Reports View Controls
+        private ComboBox _cboReportMonth = null!;
+        private ComboBox _cboReportYear = null!;
+        private ComboBox _cboReportCategory = null!;
+        private ComboBox _cboReportType = null!;
+        private TextBox _txtReportSearch = null!;
+        private KpiCard _cardReportTxCount = null!;
+        private KpiCard _cardReportInUnits = null!;
+        private KpiCard _cardReportOutUnits = null!;
+        private KpiCard _cardReportRevenue = null!;
+        private DataGridView _gridReport = null!;
+        private List<StockTransaction> _cachedReportTransactions = new();
+
+        // 8. User Management View Controls
+        private DataGridView _gridUsers = null!;
+        private TextBox _txtUserSearch = null!;
+        private ComboBox _cboUserRoleFilter = null!;
+        private KpiCard _cardUsersTotal = null!;
+        private KpiCard _cardUsersAdmin = null!;
+        private KpiCard _cardUsersStaff = null!;
+        private KpiCard _cardUsersSales = null!;
+        private List<User> _allCachedUsers = new();
+
         public DashboardForm(IInventoryService inventoryService, User? currentUser = null, IAuthService? authService = null)
         {
             _inventoryService = inventoryService ?? throw new ArgumentNullException(nameof(inventoryService));
@@ -115,7 +141,7 @@ namespace Inventory_Management_System.UI
             };
 
             InitializeComponent();
-            SwitchView("Dashboard");
+            SwitchView(CurrentUser.IsAdmin ? "Dashboard" : "Products");
             LoadAllData();
         }
 
@@ -239,11 +265,14 @@ namespace Inventory_Management_System.UI
             };
 
             int btnY = 10;
-            string dashText = CurrentUser.IsAdmin ? "📊  Executive Dashboard" : (CurrentUser.IsSalesStaff ? "📊  Sales & Orders" : "📊  Operations Dashboard");
+            if (CurrentUser.IsAdmin)
+            {
+                navContainer.Controls.Add(CreateNavButton("Dashboard", "📊  Executive Dashboard", ref btnY));
+            }
+
             string prodText = CurrentUser.IsAdmin ? "📦  Product Catalog" : (CurrentUser.IsSalesStaff ? "📦  Product Catalog (Sales)" : "📦  Product Catalog (View)");
             string moveText = CurrentUser.IsSalesStaff ? "🛒  Customer Sales & Orders" : "🔄  Stock Movements";
 
-            navContainer.Controls.Add(CreateNavButton("Dashboard", dashText, ref btnY));
             navContainer.Controls.Add(CreateNavButton("Products", prodText, ref btnY));
             navContainer.Controls.Add(CreateNavButton("Movements", moveText, ref btnY));
             if (!CurrentUser.IsSalesStaff)
@@ -252,7 +281,9 @@ namespace Inventory_Management_System.UI
             }
             if (CurrentUser.IsAdmin)
             {
+                navContainer.Controls.Add(CreateNavButton("Reports", "📈  Monthly Reports", ref btnY));
                 navContainer.Controls.Add(CreateNavButton("Categories", "🏷️  Categories", ref btnY));
+                navContainer.Controls.Add(CreateNavButton("Users", "👥  User Management", ref btnY));
                 navContainer.Controls.Add(CreateNavButton("Settings", "⚙️  System Settings", ref btnY));
             }
 
@@ -391,26 +422,21 @@ namespace Inventory_Management_System.UI
             _panelMovementsView.Visible = false;
             _panelAuditsView.Visible = false;
             _panelCategoriesView.Visible = false;
+            _panelReportsView.Visible = false;
+            _panelUsersView.Visible = false;
             _panelSettingsView.Visible = false;
 
             switch (key.ToLowerInvariant())
             {
                 case "dashboard":
-                    if (CurrentUser.IsAdmin)
+                    if (!CurrentUser.IsAdmin)
                     {
-                        _lblHeaderTitle.Text = "Inventory Intelligence & Executive Dashboard";
-                        _lblHeaderSubtitle.Text = "Real-time stock analytics, turnover telemetry & restock triggers";
+                        MessageBox.Show("Access Denied: The Executive Dashboard is restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        SwitchView("Products");
+                        return;
                     }
-                    else if (CurrentUser.IsSalesStaff)
-                    {
-                        _lblHeaderTitle.Text = "Sales Operations & Outflow Dashboard";
-                        _lblHeaderSubtitle.Text = "Real-time catalog availability, customer sales dispatch & demand telemetry";
-                    }
-                    else
-                    {
-                        _lblHeaderTitle.Text = "Warehouse Operations Dashboard";
-                        _lblHeaderSubtitle.Text = "Real-time inventory levels, low stock alerts & restocking workflows";
-                    }
+                    _lblHeaderTitle.Text = "Inventory Intelligence & Executive Dashboard";
+                    _lblHeaderSubtitle.Text = "Real-time stock analytics, turnover telemetry & restock triggers";
                     _panelDashboardView.Visible = true;
                     _panelDashboardView.BringToFront();
                     LoadDashboardData();
@@ -451,7 +477,7 @@ namespace Inventory_Management_System.UI
                     if (CurrentUser.IsSalesStaff)
                     {
                         MessageBox.Show("Access Denied: Physical inventory audits are restricted to Warehouse and Administrative staff.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        SwitchView("Dashboard");
+                        SwitchView(CurrentUser.IsAdmin ? "Dashboard" : "Products");
                         return;
                     }
                     _lblHeaderTitle.Text = "Inventory Health & Verification Audits";
@@ -465,7 +491,7 @@ namespace Inventory_Management_System.UI
                     if (!CurrentUser.IsAdmin)
                     {
                         MessageBox.Show("Access Denied: System Settings is restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        SwitchView("Dashboard");
+                        SwitchView(CurrentUser.IsAdmin ? "Dashboard" : "Products");
                         return;
                     }
                     _lblHeaderTitle.Text = "System Configuration & Architecture";
@@ -478,7 +504,7 @@ namespace Inventory_Management_System.UI
                     if (!CurrentUser.IsAdmin)
                     {
                         MessageBox.Show("Access Denied: Category Management is restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        SwitchView("Dashboard");
+                        SwitchView(CurrentUser.IsAdmin ? "Dashboard" : "Products");
                         return;
                     }
                     _lblHeaderTitle.Text = "Category Management & Taxonomy";
@@ -486,6 +512,34 @@ namespace Inventory_Management_System.UI
                     _panelCategoriesView.Visible = true;
                     _panelCategoriesView.BringToFront();
                     LoadCategoriesData();
+                    break;
+
+                case "reports":
+                    if (!CurrentUser.IsAdmin)
+                    {
+                        MessageBox.Show("Access Denied: Monthly Reports & Analytics are restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        SwitchView("Products");
+                        return;
+                    }
+                    _lblHeaderTitle.Text = "Monthly Inventory & Financial Analytics Reports";
+                    _lblHeaderSubtitle.Text = "Filter by month, category, and movement type to analyze monthly velocity and dispatches";
+                    _panelReportsView.Visible = true;
+                    _panelReportsView.BringToFront();
+                    LoadReportData();
+                    break;
+
+                case "users":
+                    if (!CurrentUser.IsAdmin)
+                    {
+                        MessageBox.Show("Access Denied: User Management is restricted to Administrators only.", "Authorization Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        SwitchView("Products");
+                        return;
+                    }
+                    _lblHeaderTitle.Text = "System User & Role-Based Access Control";
+                    _lblHeaderSubtitle.Text = "Manage employee accounts, role assignments, security credentials & permissions";
+                    _panelUsersView.Visible = true;
+                    _panelUsersView.BringToFront();
+                    LoadUsersData();
                     break;
             }
         }
@@ -602,6 +656,8 @@ namespace Inventory_Management_System.UI
             BuildMovementsView();
             BuildAuditsView();
             BuildCategoriesView();
+            BuildReportsView();
+            BuildUsersView();
             BuildSettingsView();
         }
 
@@ -677,8 +733,50 @@ namespace Inventory_Management_System.UI
             chartsTable.Controls.Add(chartCard1, 0, 0);
             chartsTable.Controls.Add(chartCard2, 1, 0);
 
-            // Spacer between charts and restock watchlist
+            // Spacer between charts and top selling
             var spacer2 = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
+
+            // 2.5 Top Selling Products (This Month) Chart
+            var topSellingCard = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 250,
+                BackColor = Color.White,
+                Padding = new Padding(16)
+            };
+            topSellingCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, topSellingCard.Width - 1, topSellingCard.Height - 1); };
+
+            var topSellingHeader = new Panel { Dock = DockStyle.Top, Height = 32 };
+            var lblTopSellingTitle = new Label 
+            { 
+                Text = "🔥  Top Selling Products (This Month)", 
+                Font = Theme.FontHeadingSm, 
+                ForeColor = Theme.TextDark, 
+                Dock = DockStyle.Left, 
+                AutoSize = true 
+            };
+            var lblTopSellingSub = new Label 
+            { 
+                Text = "Monthly customer sales volume & dispatch turnover", 
+                Font = Theme.FontCaption, 
+                ForeColor = Theme.TextMuted, 
+                Dock = DockStyle.Right, 
+                AutoSize = true 
+            };
+            topSellingHeader.Controls.Add(lblTopSellingTitle);
+            topSellingHeader.Controls.Add(lblTopSellingSub);
+
+            _chartTopSelling = new CartesianChart 
+            { 
+                Dock = DockStyle.Fill 
+            };
+
+            topSellingCard.Controls.Add(_chartTopSelling);
+            topSellingCard.Controls.Add(topSellingHeader);
+            _chartTopSelling.BringToFront();
+
+            // Spacer between top selling and restock watchlist
+            var spacer3 = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
 
             // 3. Bottom Urgent Watchlist
             var restockCard = new Panel
@@ -764,9 +862,11 @@ namespace Inventory_Management_System.UI
             _gridUrgentStock.BringToFront();
 
             // Docking layout in WinForms processes reverse index order.
-            // Adding: restockCard -> spacer2 -> chartsTable -> spacer1 -> kpiTable
-            // Results in top-to-bottom display: kpiTable -> spacer1 -> chartsTable -> spacer2 -> restockCard
+            // Adding: restockCard -> spacer3 -> topSellingCard -> spacer2 -> chartsTable -> spacer1 -> kpiTable
+            // Results in top-to-bottom display: kpiTable -> spacer1 -> chartsTable -> spacer2 -> topSellingCard -> spacer3 -> restockCard
             _panelDashboardView.Controls.Add(restockCard);
+            _panelDashboardView.Controls.Add(spacer3);
+            _panelDashboardView.Controls.Add(topSellingCard);
             _panelDashboardView.Controls.Add(spacer2);
             _panelDashboardView.Controls.Add(chartsTable);
             _panelDashboardView.Controls.Add(spacer1);
@@ -1289,7 +1389,217 @@ namespace Inventory_Management_System.UI
 
         #endregion
 
-        #region View 6: System Settings View
+        #region View 6: Monthly Reports View
+
+        private void BuildReportsView()
+        {
+            _panelReportsView = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Theme.CanvasBg,
+                Padding = new Padding(24, 20, 24, 24)
+            };
+
+            // 1. Top Filter Action Card
+            var filterCard = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 68,
+                BackColor = Color.White,
+                Padding = new Padding(16, 14, 16, 14)
+            };
+            filterCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, filterCard.Width - 1, filterCard.Height - 1); };
+
+            var searchFilterFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoScroll = false
+            };
+
+            // Year selector
+            var lblYear = new Label { Text = "Year:", Font = Theme.FontBodyBold, ForeColor = Theme.TextDark, AutoSize = true, Margin = new Padding(0, 8, 4, 0) };
+            _cboReportYear = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 95,
+                Font = Theme.FontBody,
+                Margin = new Padding(0, 4, 10, 0)
+            };
+
+            // Month selector
+            var lblMonth = new Label { Text = "Month:", Font = Theme.FontBodyBold, ForeColor = Theme.TextDark, AutoSize = true, Margin = new Padding(0, 8, 4, 0) };
+            _cboReportMonth = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 135,
+                Font = Theme.FontBody,
+                Margin = new Padding(0, 4, 10, 0)
+            };
+
+            // Category selector
+            var lblCat = new Label { Text = "Category:", Font = Theme.FontBodyBold, ForeColor = Theme.TextDark, AutoSize = true, Margin = new Padding(0, 8, 4, 0) };
+            _cboReportCategory = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 145,
+                Font = Theme.FontBody,
+                Margin = new Padding(0, 4, 10, 0)
+            };
+
+            // Movement Type selector
+            var lblType = new Label { Text = "Type:", Font = Theme.FontBodyBold, ForeColor = Theme.TextDark, AutoSize = true, Margin = new Padding(0, 8, 4, 0) };
+            _cboReportType = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 125,
+                Font = Theme.FontBody,
+                Margin = new Padding(0, 4, 10, 0)
+            };
+            _cboReportType.Items.AddRange(new object[] { "All Types", "OUT (Sales)", "IN (Intake)", "ADJUSTMENT" });
+            _cboReportType.SelectedIndex = 0;
+
+            // Search box
+            _txtReportSearch = new TextBox
+            {
+                PlaceholderText = "Search Product / SKU...",
+                Width = 145,
+                Font = Theme.FontBody,
+                Margin = new Padding(0, 4, 10, 0)
+            };
+            _txtReportSearch.TextChanged += (s, e) => FilterReportData();
+
+            _cboReportYear.SelectedIndexChanged += (s, e) => FilterReportData();
+            _cboReportMonth.SelectedIndexChanged += (s, e) => FilterReportData();
+            _cboReportCategory.SelectedIndexChanged += (s, e) => FilterReportData();
+            _cboReportType.SelectedIndexChanged += (s, e) => FilterReportData();
+
+            searchFilterFlow.Controls.Add(lblYear);
+            searchFilterFlow.Controls.Add(_cboReportYear);
+            searchFilterFlow.Controls.Add(lblMonth);
+            searchFilterFlow.Controls.Add(_cboReportMonth);
+            searchFilterFlow.Controls.Add(lblCat);
+            searchFilterFlow.Controls.Add(_cboReportCategory);
+            searchFilterFlow.Controls.Add(lblType);
+            searchFilterFlow.Controls.Add(_cboReportType);
+            searchFilterFlow.Controls.Add(_txtReportSearch);
+
+            // Right action buttons
+            var actionsFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                AutoSize = true,
+                Margin = new Padding(0)
+            };
+
+            var btnExportCsv = new Button
+            {
+                Text = "📥  Export CSV",
+                Size = new Size(130, 36),
+                Font = Theme.FontBodyBold,
+                Margin = new Padding(6, 0, 0, 0)
+            };
+            Theme.ApplyFlatButton(btnExportCsv, Theme.Success, Color.White);
+            btnExportCsv.Click += (s, e) => ExportReportToCsv();
+
+            var btnRefresh = new Button
+            {
+                Text = "🔄  Refresh",
+                Size = new Size(105, 36),
+                Font = Theme.FontBodyBold,
+                Margin = new Padding(6, 0, 0, 0)
+            };
+            Theme.ApplyFlatButton(btnRefresh, Theme.CardBorder, Theme.TextDark);
+            btnRefresh.Click += (s, e) => LoadReportData();
+
+            actionsFlow.Controls.Add(btnExportCsv);
+            actionsFlow.Controls.Add(btnRefresh);
+
+            filterCard.Controls.Add(searchFilterFlow);
+            filterCard.Controls.Add(actionsFlow);
+
+            var spacer1 = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = Color.Transparent };
+
+            // 2. 4 Period KPI Summary Cards
+            var kpiTable = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 95,
+                ColumnCount = 4,
+                RowCount = 1,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+
+            _cardReportTxCount = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 6, 0) };
+            _cardReportInUnits = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(6, 0, 6, 0) };
+            _cardReportOutUnits = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(6, 0, 6, 0) };
+            _cardReportRevenue = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(6, 0, 0, 0) };
+
+            kpiTable.Controls.Add(_cardReportTxCount, 0, 0);
+            kpiTable.Controls.Add(_cardReportInUnits, 1, 0);
+            kpiTable.Controls.Add(_cardReportOutUnits, 2, 0);
+            kpiTable.Controls.Add(_cardReportRevenue, 3, 0);
+
+            var spacer2 = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = Color.Transparent };
+
+            // 3. Main DataGrid Table Card
+            var gridCard = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Padding = new Padding(16)
+            };
+            gridCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, gridCard.Width - 1, gridCard.Height - 1); };
+
+            _gridReport = new DataGridView { Dock = DockStyle.Fill };
+            Theme.ApplyModernGrid(_gridReport);
+            _gridReport.RowTemplate.Height = 44;
+            _gridReport.CellFormatting += OnMovementsCellFormatting;
+            _gridReport.CellDoubleClick += (s, e) =>
+            {
+                if (e.RowIndex >= 0 && _gridReport.CurrentRow != null)
+                {
+                    object? val = _gridReport.CurrentRow.Cells["TransactionID"]?.Value;
+                    if (val != null && long.TryParse(val.ToString(), out long txId))
+                    {
+                        var tx = _cachedReportTransactions.FirstOrDefault(t => t.TransactionID == txId);
+                        if (tx != null)
+                        {
+                            var prod = _allCachedProducts.FirstOrDefault(p => p.ProductID == tx.ProductID);
+                            var invoice = Invoice.FromTransaction(tx, prod, CurrentUser.Role);
+                            using var preview = new InvoicePreviewForm(invoice);
+                            preview.ShowDialog(this);
+                        }
+                    }
+                }
+            };
+            _gridReport.DataBindingComplete += (s, e) => SafeConfigureImageGridColumns(_gridReport, "Product", 200);
+
+            gridCard.Controls.Add(_gridReport);
+
+            // Adding: gridCard -> spacer2 -> kpiTable -> spacer1 -> filterCard
+            // Results in: filterCard -> spacer1 -> kpiTable -> spacer2 -> gridCard
+            _panelReportsView.Controls.Add(gridCard);
+            _panelReportsView.Controls.Add(spacer2);
+            _panelReportsView.Controls.Add(kpiTable);
+            _panelReportsView.Controls.Add(spacer1);
+            _panelReportsView.Controls.Add(filterCard);
+            gridCard.BringToFront();
+
+            _contentContainer.Controls.Add(_panelReportsView);
+        }
+
+        #endregion
+
+        #region View 7: System Settings View
 
         private void BuildSettingsView()
         {
@@ -1555,51 +1865,445 @@ namespace Inventory_Management_System.UI
 
         #endregion
 
+        #region View 8: User Management View (Admin Only)
+
+        private void BuildUsersView()
+        {
+            _panelUsersView = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Theme.CanvasBg,
+                Padding = new Padding(24, 20, 24, 24)
+            };
+
+            // 1. Top Action and Search Panel
+            var actionPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 58,
+                BackColor = Color.White,
+                Padding = new Padding(16, 11, 16, 11)
+            };
+            actionPanel.Paint += (s, e) =>
+            {
+                using var p = new Pen(Theme.CardBorder, 1f);
+                e.Graphics.DrawRectangle(p, 0, 0, actionPanel.Width - 1, actionPanel.Height - 1);
+            };
+
+            var searchFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Left,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false
+            };
+
+            var lblSearch = new Label
+            {
+                Text = "🔍 Search:",
+                Font = Theme.FontBodyBold,
+                ForeColor = Theme.TextDark,
+                AutoSize = true,
+                Margin = new Padding(0, 8, 8, 0)
+            };
+
+            _txtUserSearch = new TextBox
+            {
+                Width = 220,
+                Font = Theme.FontBody,
+                PlaceholderText = "Search username or name...",
+                Margin = new Padding(0, 4, 16, 0)
+            };
+            _txtUserSearch.TextChanged += (s, e) => FilterAndBindUsersGrid();
+
+            var lblRoleFilter = new Label
+            {
+                Text = "Role:",
+                Font = Theme.FontBodyBold,
+                ForeColor = Theme.TextDark,
+                AutoSize = true,
+                Margin = new Padding(0, 8, 8, 0)
+            };
+
+            _cboUserRoleFilter = new ComboBox
+            {
+                Width = 140,
+                Font = Theme.FontBody,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(0, 4, 16, 0)
+            };
+            _cboUserRoleFilter.Items.AddRange(new object[] { "All Roles", "Admin", "Staff", "Sales Staff" });
+            _cboUserRoleFilter.SelectedIndex = 0;
+            _cboUserRoleFilter.SelectedIndexChanged += (s, e) => FilterAndBindUsersGrid();
+
+            searchFlow.Controls.Add(lblSearch);
+            searchFlow.Controls.Add(_txtUserSearch);
+            searchFlow.Controls.Add(lblRoleFilter);
+            searchFlow.Controls.Add(_cboUserRoleFilter);
+
+            var actionButtonsFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                AutoSize = true,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false
+            };
+
+            var btnAdd = new Button
+            {
+                Text = "➕  New User",
+                Size = new Size(130, 36),
+                MinimumSize = new Size(110, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 0, 1)
+            };
+            Theme.ApplyFlatButton(btnAdd, Theme.Primary, Color.White);
+            btnAdd.Click += OnAddUserClick;
+
+            var btnEdit = new Button
+            {
+                Text = "✏️  Edit User",
+                Size = new Size(115, 36),
+                MinimumSize = new Size(100, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
+            Theme.ApplyFlatButton(btnEdit, ColorTranslator.FromHtml("#F1F5F9"), Theme.TextDark);
+            btnEdit.Click += OnEditUserClick;
+
+            var btnDelete = new Button
+            {
+                Text = "🗑️  Delete",
+                Size = new Size(100, 36),
+                MinimumSize = new Size(90, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
+            Theme.ApplyFlatButton(btnDelete, Theme.DangerLight, Theme.DangerDark);
+            btnDelete.Click += OnDeleteUserClick;
+
+            var btnRefresh = new Button
+            {
+                Text = "🔄  Refresh",
+                Size = new Size(105, 36),
+                MinimumSize = new Size(95, 36),
+                AutoSize = true,
+                Margin = new Padding(4, 1, 4, 1)
+            };
+            Theme.ApplyFlatButton(btnRefresh, ColorTranslator.FromHtml("#F1F5F9"), Theme.TextDark);
+            btnRefresh.Click += (s, e) => LoadUsersData();
+
+            actionButtonsFlow.Controls.Add(btnAdd);
+            actionButtonsFlow.Controls.Add(btnEdit);
+            actionButtonsFlow.Controls.Add(btnDelete);
+            actionButtonsFlow.Controls.Add(btnRefresh);
+
+            actionPanel.Controls.Add(actionButtonsFlow);
+            actionPanel.Controls.Add(searchFlow);
+
+            var spacer1 = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = Color.Transparent };
+
+            // 2. User Stats KPI Row (4 Cards)
+            var kpiTable = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 110,
+                ColumnCount = 4,
+                RowCount = 1,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+
+            _cardUsersTotal = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
+            _cardUsersAdmin = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(8, 0, 8, 0) };
+            _cardUsersStaff = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(8, 0, 8, 0) };
+            _cardUsersSales = new KpiCard { Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
+
+            kpiTable.Controls.Add(_cardUsersTotal, 0, 0);
+            kpiTable.Controls.Add(_cardUsersAdmin, 1, 0);
+            kpiTable.Controls.Add(_cardUsersStaff, 2, 0);
+            kpiTable.Controls.Add(_cardUsersSales, 3, 0);
+
+            var spacer2 = new Panel { Dock = DockStyle.Top, Height = 14, BackColor = Color.Transparent };
+
+            // 3. User DataGridView Card
+            var gridCard = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Padding = new Padding(1)
+            };
+            gridCard.Paint += (s, e) =>
+            {
+                using var p = new Pen(Theme.CardBorder, 1f);
+                e.Graphics.DrawRectangle(p, 0, 0, gridCard.Width - 1, gridCard.Height - 1);
+            };
+
+            _gridUsers = new DataGridView { Dock = DockStyle.Fill };
+            Theme.ApplyModernGrid(_gridUsers);
+            _gridUsers.DoubleClick += OnEditUserClick;
+            _gridUsers.CellFormatting += OnUsersGridCellFormatting;
+
+            gridCard.Controls.Add(_gridUsers);
+
+            // Adding in reverse order for WinForms top docking:
+            // Displays top-to-bottom: actionPanel -> spacer1 -> kpiTable -> spacer2 -> gridCard
+            _panelUsersView.Controls.Add(gridCard);
+            _panelUsersView.Controls.Add(spacer2);
+            _panelUsersView.Controls.Add(kpiTable);
+            _panelUsersView.Controls.Add(spacer1);
+            _panelUsersView.Controls.Add(actionPanel);
+            gridCard.BringToFront();
+
+            _contentContainer.Controls.Add(_panelUsersView);
+        }
+
+        private void LoadUsersData()
+        {
+            if (!CurrentUser.IsAdmin) return;
+
+            try
+            {
+                _allCachedUsers = _authService.GetAllUsers().ToList();
+                UpdateUserKpiCards();
+                FilterAndBindUsersGrid();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load users: {ex.Message}", "Data Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdateUserKpiCards()
+        {
+            int total = _allCachedUsers.Count;
+            int adminCount = _allCachedUsers.Count(u => u.IsAdmin);
+            int staffCount = _allCachedUsers.Count(u => u.IsWarehouseStaff);
+            int salesCount = _allCachedUsers.Count(u => u.IsSalesStaff);
+
+            _cardUsersTotal.SetData("Total Users", $"{total} accounts", "Active in system", Theme.Primary, "👥");
+            _cardUsersAdmin.SetData("Administrators", $"{adminCount} accounts", "Full access tier", ColorTranslator.FromHtml("#6366F1"), "🛡️");
+            _cardUsersStaff.SetData("Warehouse Staff", $"{staffCount} accounts", "Stock & operations", Theme.Warning, "📦");
+            _cardUsersSales.SetData("Sales Staff", $"{salesCount} accounts", "Customer orders & sales", Theme.Success, "🛒");
+        }
+
+        private void FilterAndBindUsersGrid()
+        {
+            if (_gridUsers == null) return;
+
+            string query = _txtUserSearch?.Text.Trim().ToLowerInvariant() ?? "";
+            string roleFilter = _cboUserRoleFilter?.SelectedItem?.ToString() ?? "All Roles";
+
+            var filtered = _allCachedUsers.Where(u =>
+            {
+                bool matchesQuery = string.IsNullOrEmpty(query) ||
+                                    u.Username.ToLowerInvariant().Contains(query) ||
+                                    u.FullName.ToLowerInvariant().Contains(query);
+
+                bool matchesRole = roleFilter == "All Roles" ||
+                                   string.Equals(u.Role, roleFilter, StringComparison.OrdinalIgnoreCase) ||
+                                   (roleFilter == "Sales Staff" && (u.IsSalesStaff || string.Equals(u.Role, "Sales", StringComparison.OrdinalIgnoreCase))) ||
+                                   (roleFilter == "Staff" && (u.IsWarehouseStaff || string.Equals(u.Role, "Warehouse Staff", StringComparison.OrdinalIgnoreCase)));
+
+                return matchesQuery && matchesRole;
+            }).Select(u => new
+            {
+                UserID = u.UserID,
+                Username = u.Username,
+                FullName = u.FullName,
+                Role = u.Role,
+                Status = u.UserID == CurrentUser.UserID ? "● You (Active)" : "Active",
+                CreatedAt = u.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+            }).ToList();
+
+            _gridUsers.DataSource = null;
+            _gridUsers.DataSource = filtered;
+
+            if (_gridUsers.Columns["UserID"] is { } colId)
+            {
+                colId.HeaderText = "User ID";
+                colId.Width = 85;
+            }
+            if (_gridUsers.Columns["Username"] is { } colUser)
+            {
+                colUser.HeaderText = "Username";
+                colUser.Width = 160;
+            }
+            if (_gridUsers.Columns["FullName"] is { } colName)
+            {
+                colName.HeaderText = "Full Display Name";
+                colName.Width = 240;
+            }
+            if (_gridUsers.Columns["Role"] is { } colRole)
+            {
+                colRole.HeaderText = "Assigned Role";
+                colRole.Width = 160;
+            }
+            if (_gridUsers.Columns["Status"] is { } colStatus)
+            {
+                colStatus.HeaderText = "Session Status";
+                colStatus.Width = 140;
+            }
+            if (_gridUsers.Columns["CreatedAt"] is { } colDate)
+            {
+                colDate.HeaderText = "Created Date";
+                colDate.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            }
+        }
+
+        private void OnUsersGridCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= _gridUsers.Rows.Count) return;
+
+            string colName = _gridUsers.Columns[e.ColumnIndex].Name;
+            if (colName == "Role" && e.Value != null)
+            {
+                string role = e.Value.ToString() ?? "";
+                if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    e.CellStyle.ForeColor = ColorTranslator.FromHtml("#4F46E5");
+                    e.CellStyle.Font = Theme.FontBodyBold;
+                }
+                else if (string.Equals(role, "Sales Staff", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase))
+                {
+                    e.CellStyle.ForeColor = Theme.SuccessDark;
+                    e.CellStyle.Font = Theme.FontBodyBold;
+                }
+                else
+                {
+                    e.CellStyle.ForeColor = Theme.WarningDark;
+                    e.CellStyle.Font = Theme.FontBodyBold;
+                }
+            }
+            else if (colName == "Status" && e.Value != null)
+            {
+                string val = e.Value.ToString() ?? "";
+                if (val.Contains("You"))
+                {
+                    e.CellStyle.ForeColor = Theme.Primary;
+                    e.CellStyle.Font = Theme.FontCaptionBold;
+                }
+                else
+                {
+                    e.CellStyle.ForeColor = Theme.SuccessDark;
+                }
+            }
+        }
+
+        private void OnAddUserClick(object? sender, EventArgs e)
+        {
+            if (!CurrentUser.IsAdmin) return;
+
+            using var modal = new AddEditUserModalForm(_authService);
+            if (modal.ShowDialog(this) == DialogResult.OK)
+            {
+                LoadUsersData();
+            }
+        }
+
+        private void OnEditUserClick(object? sender, EventArgs e)
+        {
+            if (!CurrentUser.IsAdmin) return;
+            if (_gridUsers.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a user to edit.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int userId = Convert.ToInt32(_gridUsers.CurrentRow.Cells["UserID"].Value);
+            var user = _allCachedUsers.FirstOrDefault(u => u.UserID == userId);
+            if (user == null) return;
+
+            using var modal = new AddEditUserModalForm(_authService, user);
+            if (modal.ShowDialog(this) == DialogResult.OK)
+            {
+                LoadUsersData();
+            }
+        }
+
+        private void OnDeleteUserClick(object? sender, EventArgs e)
+        {
+            if (!CurrentUser.IsAdmin) return;
+            if (_gridUsers.CurrentRow == null)
+            {
+                MessageBox.Show("Please select a user to delete.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int userId = Convert.ToInt32(_gridUsers.CurrentRow.Cells["UserID"].Value);
+            string username = _gridUsers.CurrentRow.Cells["Username"].Value?.ToString() ?? "User";
+
+            if (userId == CurrentUser.UserID)
+            {
+                MessageBox.Show("You cannot delete your own currently logged-in administrator account.", "Operation Blocked", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                $"Are you sure you want to delete user account '{username}' (ID: #{userId})?\n\nThis action cannot be undone.",
+                "Confirm User Account Deletion",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm == DialogResult.Yes)
+            {
+                bool deleted = _authService.DeleteUser(userId, CurrentUser.UserID, out string? err);
+                if (deleted)
+                {
+                    MessageBox.Show($"User '{username}' was deleted successfully.", "User Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    LoadUsersData();
+                }
+                else
+                {
+                    MessageBox.Show(err ?? "Failed to delete user.", "Operation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region Data Loading & Binding
 
         private void LoadAllData()
         {
-            LoadDashboardData();
+            if (CurrentUser.IsAdmin)
+            {
+                LoadDashboardData();
+                LoadUsersData();
+            }
             LoadCategoriesData();
             LoadProductsData();
             LoadMovementsData();
-            LoadAuditData();
+            if (!CurrentUser.IsSalesStaff)
+            {
+                LoadAuditData();
+            }
         }
 
         private void LoadDashboardData()
         {
+            if (!CurrentUser.IsAdmin)
+                return;
+
             try
             {
                 var metrics = _inventoryService.GetDashboardSummary();
 
-                if (CurrentUser.IsAdmin)
-                {
-                    _cardTotalUnits.SetData("Total Inventory", $"{metrics.TotalInventoryCount:N0} Units", $"{metrics.TotalProductCount} Total Products", Theme.Primary, "📦");
-                    _cardTotalValuation.SetData("Asset Valuation", $"${metrics.TotalAssetValuation:N2}", "Calculated at Cost Basis", Theme.Success, "💰");
-                    _cardLowStock.SetData("Restock Alerts", $"{metrics.LowStockProductCount} Items", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
-                    string prefix = metrics.TodayNetMovement >= 0 ? "+" : "";
-                    _cardNetMovement.SetData("Today's Movement", $"{prefix}{metrics.TodayNetMovement} Units", $"In: +{metrics.TodayStockIn} | Out: -{metrics.TodayStockOut}", Theme.Primary, "🔄");
-                }
-                else if (CurrentUser.IsSalesStaff)
-                {
-                    _cardTotalUnits.SetData("Catalog Products", $"{metrics.TotalProductCount} SKUs", "Available for Sale", Theme.Primary, "🏷️");
-                    _cardTotalValuation.SetData("Today's Dispatches", $"{metrics.TodayStockOut} Units Sold", "Customer Sales Today", Theme.Success, "🛍️");
-                    _cardLowStock.SetData("Low Stock Notice", $"{metrics.LowStockProductCount} Items Low", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
-                    _cardNetMovement.SetData("Total On Hand", $"{metrics.TotalInventoryCount:N0} Units", "Live Warehouse Stock", Theme.Primary, "🏢");
-                }
-                else
-                {
-                    _cardTotalUnits.SetData("Total Inventory", $"{metrics.TotalInventoryCount:N0} Units", $"{metrics.TotalProductCount} Total Products", Theme.Primary, "📦");
-                    _cardTotalValuation.SetData("Catalog Items", $"{metrics.TotalProductCount} Active SKUs", "Operational Catalog", Theme.Success, "📋");
-                    _cardLowStock.SetData("Restock Alerts", $"{metrics.LowStockProductCount} Items", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
-                    string prefix = metrics.TodayNetMovement >= 0 ? "+" : "";
-                    _cardNetMovement.SetData("Today's Movement", $"{prefix}{metrics.TodayNetMovement} Units", $"In: +{metrics.TodayStockIn} | Out: -{metrics.TodayStockOut}", Theme.Primary, "🔄");
-                }
+                _cardTotalUnits.SetData("Total Inventory", $"{metrics.TotalInventoryCount:N0} Units", $"{metrics.TotalProductCount} Total Products", Theme.Primary, "📦");
+                _cardTotalValuation.SetData("Asset Valuation", $"${metrics.TotalAssetValuation:N2}", "Calculated at Cost Basis", Theme.Success, "💰");
+                _cardLowStock.SetData("Restock Alerts", $"{metrics.LowStockProductCount} Items", $"{metrics.OutOfStockProductCount} Critical Out of Stock", metrics.LowStockProductCount > 0 ? Theme.Danger : Theme.Success, "⚠️");
+                string prefix = metrics.TodayNetMovement >= 0 ? "+" : "";
+                _cardNetMovement.SetData("Today's Movement", $"{prefix}{metrics.TodayNetMovement} Units", $"In: +{metrics.TodayStockIn} | Out: -{metrics.TodayStockOut}", Theme.Primary, "🔄");
 
                 BindMovementChart();
                 BindValuationChart();
+                BindTopSellingChart();
                 BindUrgentRestockGrid();
 
                 _lblDbStatus.Text = "● Database: Ready";
@@ -1611,6 +2315,198 @@ namespace Inventory_Management_System.UI
                 _lblDbStatus.ForeColor = Theme.Warning;
             }
         }
+
+        private void BindTopSellingChart()
+        {
+            if (_chartTopSelling == null) return;
+
+            var topList = _inventoryService.GetTopSellingProducts(6).ToList();
+            if (topList.Count == 0) return;
+
+            var names = topList.Select(t => t.ProductName.Length > 20 ? t.ProductName.Substring(0, 18) + ".." : t.ProductName).ToArray();
+            var units = topList.Select(t => t.UnitsSold).ToArray();
+
+            _chartTopSelling.Series = new ISeries[]
+            {
+                new ColumnSeries<int>
+                {
+                    Name = "Units Sold (Month)",
+                    Values = units,
+                    Fill = new SolidColorPaint(new SKColor(245, 158, 11)), // Amber 500
+                    MaxBarWidth = 45
+                }
+            };
+
+            _chartTopSelling.XAxes = new Axis[] 
+            { 
+                new Axis 
+                { 
+                    Labels = names, 
+                    LabelsPaint = new SolidColorPaint(new SKColor(100, 116, 139)), 
+                    TextSize = 11 
+                } 
+            };
+            _chartTopSelling.YAxes = new Axis[] 
+            { 
+                new Axis 
+                { 
+                    LabelsPaint = new SolidColorPaint(new SKColor(100, 116, 139)), 
+                    TextSize = 11 
+                } 
+            };
+        }
+
+
+
+        private void LoadReportData()
+        {
+            // Populate Year dropdown once
+            if (_cboReportYear.Items.Count == 0)
+            {
+                _cboReportYear.Items.Add("All Years");
+                int currentYear = DateTime.Now.Year;
+                for (int y = currentYear; y >= currentYear - 3; y--)
+                {
+                    _cboReportYear.Items.Add(y.ToString());
+                }
+                _cboReportYear.SelectedIndex = 1; // Default to current year
+            }
+
+            // Populate Month dropdown once
+            if (_cboReportMonth.Items.Count == 0)
+            {
+                _cboReportMonth.Items.Add("All Months");
+                for (int m = 1; m <= 12; m++)
+                {
+                    _cboReportMonth.Items.Add(new DateTime(2026, m, 1).ToString("MMMM"));
+                }
+                _cboReportMonth.SelectedIndex = DateTime.Now.Month; // Default to current month
+            }
+
+            // Populate Category dropdown
+            if (_cboReportCategory.Items.Count <= 1)
+            {
+                _cboReportCategory.Items.Clear();
+                _cboReportCategory.Items.Add("All Categories");
+                foreach (var cat in _allCachedCategories)
+                {
+                    _cboReportCategory.Items.Add(cat);
+                }
+                _cboReportCategory.SelectedIndex = 0;
+            }
+
+            FilterReportData();
+        }
+
+        private void FilterReportData()
+        {
+            if (_cboReportYear == null || _cboReportMonth == null) return;
+
+            int? selectedYear = null;
+            if (_cboReportYear.SelectedIndex > 0 && int.TryParse(_cboReportYear.SelectedItem?.ToString(), out int y))
+            {
+                selectedYear = y;
+            }
+
+            int? selectedMonth = null;
+            if (_cboReportMonth.SelectedIndex > 0)
+            {
+                selectedMonth = _cboReportMonth.SelectedIndex;
+            }
+
+            int? selectedCategoryId = null;
+            if (_cboReportCategory.SelectedItem is Category cat && cat.CategoryID > 0)
+            {
+                selectedCategoryId = cat.CategoryID;
+            }
+
+            string? selectedType = null;
+            if (_cboReportType.SelectedIndex > 0)
+            {
+                string txt = _cboReportType.SelectedItem?.ToString() ?? string.Empty;
+                if (txt.StartsWith("OUT")) selectedType = "OUT";
+                else if (txt.StartsWith("IN")) selectedType = "IN";
+                else if (txt.StartsWith("ADJUSTMENT")) selectedType = "ADJUSTMENT";
+            }
+
+            string query = _txtReportSearch?.Text?.Trim() ?? string.Empty;
+
+            _cachedReportTransactions = _inventoryService.GetFilteredTransactions(selectedYear, selectedMonth, selectedCategoryId, selectedType, query).ToList();
+
+            // Calculate KPIs
+            int txCount = _cachedReportTransactions.Count;
+            int inUnits = _cachedReportTransactions.Where(t => t.TransactionType == "IN").Sum(t => t.Quantity);
+            int outUnits = _cachedReportTransactions.Where(t => t.TransactionType == "OUT").Sum(t => t.Quantity);
+            decimal revenue = _cachedReportTransactions.Where(t => t.TransactionType == "OUT").Sum(t => t.TotalAmount);
+
+            string periodDesc = selectedMonth.HasValue
+                ? $"{new DateTime(selectedYear ?? DateTime.Now.Year, selectedMonth.Value, 1):MMMM yyyy}"
+                : (selectedYear.HasValue ? $"Year {selectedYear.Value}" : "All Time");
+
+            _cardReportTxCount.SetData("Total Movements", $"{txCount:N0} Records", periodDesc, Theme.Primary, "📋");
+            _cardReportInUnits.SetData("Stock Intake (IN)", $"+{inUnits:N0} Units", "Inflow Replenishments", Theme.Success, "📥");
+            _cardReportOutUnits.SetData("Sales Dispatches (OUT)", $"-{outUnits:N0} Units", "Dispatched to Customers", Theme.Warning, "🛒");
+            _cardReportRevenue.SetData("Sales Revenue", $"${revenue:N2}", "Customer Outflow Value", Theme.PrimaryHover, "💰");
+
+            // Bind DataGridView
+            var display = _cachedReportTransactions.Select(t => new
+            {
+                Item = ImageService.Instance.LoadThumbnail(_allCachedProducts.FirstOrDefault(p => p.ProductID == t.ProductID)?.ImagePath, 40, 40),
+                t.TransactionID,
+                Date = t.TransactionDate.ToString("yyyy-MM-dd HH:mm"),
+                Type = t.TransactionType,
+                t.SKU,
+                Product = t.ProductName,
+                Category = t.CategoryName,
+                t.Quantity,
+                Unit_Price = $"${t.UnitPrice:N2}",
+                Total_Value = $"${t.TotalAmount:N2}",
+                Reference = t.ReferenceNo ?? "-",
+                Handled_By = t.CreatedByName,
+                Notes = t.Notes ?? string.Empty
+            }).ToList();
+
+            _gridReport.DataSource = display;
+            SafeConfigureImageGridColumns(_gridReport, "Product", 200);
+        }
+
+        private void ExportReportToCsv()
+        {
+            if (_cachedReportTransactions.Count == 0)
+            {
+                MessageBox.Show("No transactions available to export for the selected filter.", "Export Report", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var sfd = new SaveFileDialog
+            {
+                Title = "Export Monthly Inventory Report",
+                Filter = "CSV File (*.csv)|*.csv",
+                FileName = $"Inventory_Report_{DateTime.Now:yyyyMMdd_HHmm}.csv"
+            };
+
+            if (sfd.ShowDialog(this) == DialogResult.OK)
+            {
+                try
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine("TransactionID,Date,Type,SKU,ProductName,Category,Quantity,UnitPrice,TotalAmount,Reference,HandledBy,Notes");
+                    foreach (var t in _cachedReportTransactions)
+                    {
+                        string line = $"{t.TransactionID},\"{t.TransactionDate:yyyy-MM-dd HH:mm}\",\"{t.TransactionType}\",\"{t.SKU}\",\"{t.ProductName.Replace("\"", "\"\"")}\",\"{t.CategoryName}\",{t.Quantity},{t.UnitPrice},{t.TotalAmount},\"{t.ReferenceNo ?? ""}\",\"{t.CreatedByName}\",\"{t.Notes?.Replace("\"", "\"\"") ?? ""}\"";
+                        sb.AppendLine(line);
+                    }
+                    System.IO.File.WriteAllText(sfd.FileName, sb.ToString(), System.Text.Encoding.UTF8);
+                    MessageBox.Show($"Successfully exported {_cachedReportTransactions.Count} records to:\n{sfd.FileName}", "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error exporting CSV file:\n{ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+
 
         private void BindMovementChart()
         {
