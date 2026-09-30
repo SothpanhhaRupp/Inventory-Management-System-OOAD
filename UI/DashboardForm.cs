@@ -91,7 +91,7 @@ namespace Inventory_Management_System.UI
         private List<StockTransaction> _allCachedTransactions = new();
 
         // 5. Settings View Controls
-        private Label _lblConnectionTestResult = null!;
+
 
         // 6. Category Management View Controls
         private DataGridView _gridCategories = null!;
@@ -469,8 +469,8 @@ namespace Inventory_Management_System.UI
                         SwitchView(CurrentUser.IsAdmin ? "Dashboard" : "Products");
                         return;
                     }
-                    _lblHeaderTitle.Text = "System Configuration & Architecture";
-                    _lblHeaderSubtitle.Text = "Database connection status, security profiles & 3-Tier diagnostic telemetry";
+                    _lblHeaderTitle.Text = "System Settings";
+                    _lblHeaderSubtitle.Text = "Database connectivity, automated Telegram alerts, and runtime environment";
                     _panelSettingsView.Visible = true;
                     _panelSettingsView.BringToFront();
                     break;
@@ -1494,138 +1494,166 @@ namespace Inventory_Management_System.UI
                 Padding = new Padding(24, 20, 24, 24)
             };
 
-            // Card 1: Database Connection Settings
-            var dbCard = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 220,
-                BackColor = Color.White,
-                Padding = new Padding(20)
-            };
-            dbCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, dbCard.Width - 1, dbCard.Height - 1); };
-
-            var lblDbTitle = new Label { Text = "Microsoft SQL Server Database Connection", Font = Theme.FontHeadingSm, ForeColor = Theme.TextDark, Location = new Point(16, 16), AutoSize = true };
-            var lblDbSub = new Label { Text = "Configuration sourced from App.config via Microsoft.Data.SqlClient ADO.NET connection pooling", Font = Theme.FontCaption, ForeColor = Theme.TextMuted, Location = new Point(16, 40), AutoSize = true };
-
-            var txtConn = new TextBox
-            {
-                Text = DatabaseHelper.ConnectionString,
-                Location = new Point(16, 70),
-                Size = new Size(680, 30),
-                Font = Theme.FontBody,
-                ReadOnly = true
-            };
-
-            var btnTestConn = new Button { Text = "🔌  Test SQL Connection", Size = new Size(180, 34), Location = new Point(16, 115) };
-            Theme.ApplyFlatButton(btnTestConn, Theme.Primary, Color.White);
-
-            _lblConnectionTestResult = new Label
-            {
-                Text = "Status: Not Tested",
-                Font = Theme.FontCaption,
-                ForeColor = Theme.TextMuted,
-                Location = new Point(215, 124),
-                AutoSize = true
-            };
-
-            btnTestConn.Click += (s, e) =>
-            {
-                bool success = DatabaseHelper.TestConnection(out string? err);
-                if (success)
-                {
-                    _lblConnectionTestResult.Text = "● Connection Successful (SQL Server Active)";
-                    _lblConnectionTestResult.ForeColor = Theme.SuccessDark;
-                    _lblDbStatus.Text = "● Database: Active";
-                    _lblDbStatus.ForeColor = Theme.Success;
-                }
-                else
-                {
-                    _lblConnectionTestResult.Text = $"● Connection Failed: {err}";
-                    _lblConnectionTestResult.ForeColor = Theme.DangerDark;
-                }
-            };
-
-            var lblHelp = new Label
-            {
-                Text = "💡 Tip: Switch connection string in App.config between LocalDB (Server=(localdb)\\MSSQLLocalDB) and SQL Express (Server=.\\SQLEXPRESS).",
-                Font = Theme.FontCaption,
-                ForeColor = Theme.TextMuted,
-                Location = new Point(16, 165),
-                AutoSize = true
-            };
-
-            dbCard.Controls.Add(lblDbTitle);
-            dbCard.Controls.Add(lblDbSub);
-            dbCard.Controls.Add(txtConn);
-            dbCard.Controls.Add(btnTestConn);
-            dbCard.Controls.Add(_lblConnectionTestResult);
-            dbCard.Controls.Add(lblHelp);
-
-            var spacer = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
-
-            // Card 2: Telegram Bot Notification Settings
+            // ==========================================
+            // Telegram Bot Notification Settings
+            // ==========================================
             var telegramCard = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 310,
+                Height = 245,
                 BackColor = Color.White,
-                Padding = new Padding(20)
+                Padding = new Padding(24, 18, 24, 18)
             };
-            telegramCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, telegramCard.Width - 1, telegramCard.Height - 1); };
-
-            var lblTgTitle = new Label { Text = "📢  Telegram Bot Low Stock Alerts (ការជូនដំណឹងតាម Telegram)", Font = Theme.FontHeadingSm, ForeColor = Theme.TextDark, Location = new Point(16, 16), AutoSize = true };
-            var lblTgSub = new Label { Text = "ផ្ញើសារជាភាសាខ្មែរទៅកាន់ Telegram Bot ដោយស្វ័យប្រវត្តិនូវរាល់ពេលទំនិញធ្លាក់ចុះដល់កម្រិតជិតអស់ពីស្តុក (Current Stock ≤ Reorder Level) ឬអស់ពីស្តុក", Font = Theme.FontCaption, ForeColor = Theme.TextMuted, Location = new Point(16, 40), AutoSize = true };
-
-            var lblTgToken = new Label { Text = "Bot Token:", Font = Theme.FontCaptionBold, ForeColor = Theme.TextDark, Location = new Point(16, 70), AutoSize = true };
-            var txtTgToken = new TextBox
+            telegramCard.Paint += (s, e) =>
             {
-                Text = _inventoryService.TelegramService.BotToken,
-                Location = new Point(16, 92),
-                Size = new Size(460, 30),
-                Font = Theme.FontBody
+                using var p = new Pen(Theme.CardBorder, 1f);
+                e.Graphics.DrawRectangle(p, 0, 0, telegramCard.Width - 1, telegramCard.Height - 1);
             };
 
-            var lblTgChatId = new Label { Text = "Chat ID / Group ID:", Font = Theme.FontCaptionBold, ForeColor = Theme.TextDark, Location = new Point(490, 70), AutoSize = true };
-            var txtTgChatId = new TextBox
+            var lblTgTitle = new Label
             {
-                Text = _inventoryService.TelegramService.ChatId,
-                Location = new Point(490, 92),
-                Size = new Size(240, 30),
-                Font = Theme.FontBody
+                Text = "✈️  Telegram Alerts",
+                Font = Theme.FontHeadingMd,
+                ForeColor = Theme.TextDark,
+                Location = new Point(24, 16),
+                AutoSize = true
+            };
+
+            var lblTgSub = new Label
+            {
+                Text = "Automated instant notifications when products drop below reorder level",
+                Font = Theme.FontCaption,
+                ForeColor = Theme.TextMuted,
+                Location = new Point(24, 40),
+                AutoSize = true
             };
 
             var chkTgEnabled = new CheckBox
             {
-                Text = "បើកដំណើរការការជូនដំណឹងស្វ័យប្រវត្តិ (Enable Real-Time Alerts)",
+                Text = "Enable Alerts",
                 Checked = _inventoryService.TelegramService.IsEnabled,
-                Location = new Point(16, 132),
                 AutoSize = true,
                 Font = Theme.FontBodyBold,
-                ForeColor = Theme.TextDark
+                ForeColor = Theme.TextDark,
+                Cursor = Cursors.Hand
             };
 
-            var btnDetectChat = new Button { Text = "🔍  Detect Chat ID", Size = new Size(160, 34), Location = new Point(16, 170) };
+            var lblTgBadge = new Label
+            {
+                Text = chkTgEnabled.Checked ? "● Active" : "○ Inactive",
+                Font = Theme.FontCaptionBold,
+                ForeColor = chkTgEnabled.Checked ? Theme.SuccessDark : Theme.TextMuted,
+                AutoSize = true
+            };
+
+            chkTgEnabled.CheckedChanged += (s, e) =>
+            {
+                lblTgBadge.Text = chkTgEnabled.Checked ? "● Active" : "○ Inactive";
+                lblTgBadge.ForeColor = chkTgEnabled.Checked ? Theme.SuccessDark : Theme.TextMuted;
+                lblTgBadge.Location = new Point(chkTgEnabled.Left - lblTgBadge.Width - 12, 18);
+            };
+
+            var lblTgToken = new Label
+            {
+                Text = "BOT TOKEN",
+                Font = Theme.FontCaptionBold,
+                ForeColor = Theme.TextMuted,
+                Location = new Point(24, 70),
+                AutoSize = true
+            };
+
+            var txtTgToken = new TextBox
+            {
+                Text = _inventoryService.TelegramService.BotToken,
+                Location = new Point(24, 92),
+                Height = 30,
+                Font = Theme.FontBody,
+                PlaceholderText = "e.g. 123456789:ABCdef..."
+            };
+
+            var lblTgChatId = new Label
+            {
+                Text = "CHAT ID / GROUP ID",
+                Font = Theme.FontCaptionBold,
+                ForeColor = Theme.TextMuted,
+                Location = new Point(510, 70),
+                AutoSize = true
+            };
+
+            var txtTgChatId = new TextBox
+            {
+                Text = _inventoryService.TelegramService.ChatId,
+                Location = new Point(510, 92),
+                Height = 30,
+                Font = Theme.FontBody,
+                PlaceholderText = "e.g. 1712932157"
+            };
+
+            var btnDetectChat = new Button
+            {
+                Text = "🔍  Detect ID",
+                Size = new Size(130, 34),
+                Location = new Point(24, 134),
+                Cursor = Cursors.Hand
+            };
             Theme.ApplyFlatButton(btnDetectChat, Theme.Secondary, Color.White);
 
-            var btnTestTg = new Button { Text = "📨  Send Test Alert (Khmer)", Size = new Size(205, 34), Location = new Point(186, 170) };
+            var btnTestTg = new Button
+            {
+                Text = "🔔  Send Test",
+                Size = new Size(130, 34),
+                Location = new Point(162, 134),
+                Cursor = Cursors.Hand
+            };
             Theme.ApplyFlatButton(btnTestTg, Theme.Primary, Color.White);
 
-            var btnSaveTg = new Button { Text = "💾  Save Telegram Settings", Size = new Size(195, 34), Location = new Point(401, 170) };
+            var btnSaveTg = new Button
+            {
+                Text = "💾  Save Settings",
+                Size = new Size(140, 34),
+                Location = new Point(300, 134),
+                Cursor = Cursors.Hand
+            };
             Theme.ApplyFlatButton(btnSaveTg, Theme.Success, Color.White);
+
+            var lblTgTip = new Label
+            {
+                Text = "💡 Tip: Send /start to your bot in Telegram, then click 'Detect ID'.",
+                Font = Theme.FontCaption,
+                ForeColor = Theme.TextMuted,
+                Location = new Point(452, 142),
+                AutoSize = true
+            };
 
             var lblTgStatus = new Label
             {
-                Text = "ស្ថានភាព៖ រួចរាល់សម្រាប់ការជូនដំណឹង (Ready)",
-                Font = Theme.FontCaption,
+                Text = "● Ready to send notifications",
+                Font = Theme.FontBody,
                 ForeColor = Theme.TextMuted,
-                Location = new Point(16, 215),
+                Location = new Point(24, 184),
                 AutoSize = true
+            };
+
+            telegramCard.Resize += (s, e) =>
+            {
+                chkTgEnabled.Location = new Point(Math.Max(300, telegramCard.ClientSize.Width - chkTgEnabled.Width - 24), 16);
+                lblTgBadge.Location = new Point(chkTgEnabled.Left - lblTgBadge.Width - 12, 18);
+
+                int availableWidth = Math.Max(300, telegramCard.ClientSize.Width - 48 - 16);
+                int tokenWidth = (int)(availableWidth * 0.62);
+                int chatLeft = 24 + tokenWidth + 16;
+                int chatWidth = availableWidth - tokenWidth;
+
+                txtTgToken.Width = tokenWidth;
+                lblTgChatId.Location = new Point(chatLeft, 70);
+                txtTgChatId.Location = new Point(chatLeft, 92);
+                txtTgChatId.Width = chatWidth;
             };
 
             btnDetectChat.Click += async (s, e) =>
             {
                 btnDetectChat.Enabled = false;
-                lblTgStatus.Text = "កំពុងស្វែងរក Chat ID ពី Telegram Updates...";
+                lblTgStatus.Text = "Searching recent Telegram updates...";
                 lblTgStatus.ForeColor = Theme.Primary;
 
                 var result = await _inventoryService.TelegramService.DetectLatestChatIdAsync();
@@ -1634,12 +1662,12 @@ namespace Inventory_Management_System.UI
                 if (result.Success && !string.IsNullOrWhiteSpace(result.DetectedChatId))
                 {
                     txtTgChatId.Text = result.DetectedChatId;
-                    lblTgStatus.Text = $"● រកឃើញ Chat ID ដោយជោគជ័យ: {result.DetectedChatId} ({result.SenderName})";
+                    lblTgStatus.Text = $"● Detected Chat ID: {result.DetectedChatId} ({result.SenderName})";
                     lblTgStatus.ForeColor = Theme.SuccessDark;
                 }
                 else
                 {
-                    lblTgStatus.Text = $"● រកមិនឃើញ Chat ID: {result.Error}";
+                    lblTgStatus.Text = $"● Could not detect Chat ID: {result.Error}";
                     lblTgStatus.ForeColor = Theme.DangerDark;
                 }
             };
@@ -1647,7 +1675,7 @@ namespace Inventory_Management_System.UI
             btnTestTg.Click += async (s, e) =>
             {
                 btnTestTg.Enabled = false;
-                lblTgStatus.Text = "កំពុងផ្ញើសារសាកល្បងជាភាសាខ្មែរទៅកាន់ Telegram...";
+                lblTgStatus.Text = "Sending test alert to Telegram...";
                 lblTgStatus.ForeColor = Theme.Primary;
 
                 _inventoryService.TelegramService.UpdateConfig(txtTgToken.Text.Trim(), txtTgChatId.Text.Trim(), chkTgEnabled.Checked);
@@ -1656,12 +1684,12 @@ namespace Inventory_Management_System.UI
 
                 if (ok)
                 {
-                    lblTgStatus.Text = "● បានផ្ញើសារសាកល្បងទៅកាន់ Telegram ទទួលបានជោគជ័យ!";
+                    lblTgStatus.Text = "● Test notification sent successfully to Telegram!";
                     lblTgStatus.ForeColor = Theme.SuccessDark;
                 }
                 else
                 {
-                    lblTgStatus.Text = "● ការផ្ញើសារបរាជ័យ! សូមពិនិត្យមើល Token និង Chat ID។";
+                    lblTgStatus.Text = "● Test notification failed. Check Bot Token and Chat ID.";
                     lblTgStatus.ForeColor = Theme.DangerDark;
                 }
             };
@@ -1669,79 +1697,25 @@ namespace Inventory_Management_System.UI
             btnSaveTg.Click += (s, e) =>
             {
                 _inventoryService.TelegramService.UpdateConfig(txtTgToken.Text.Trim(), txtTgChatId.Text.Trim(), chkTgEnabled.Checked);
-                lblTgStatus.Text = "● បានរក្សាទុកការកំណត់ Telegram ដោយជោគជ័យ!";
+                lblTgStatus.Text = "● Telegram configuration saved successfully!";
                 lblTgStatus.ForeColor = Theme.SuccessDark;
-                MessageBox.Show("ការកំណត់ Telegram Bot ត្រូវបានរក្សាទុកដោយជោគជ័យ!", "រក្សាទុកជោគជ័យ", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            };
-
-            var lblTgTip = new Label
-            {
-                Text = "💡 ព័ត៌មានជំនួយ៖ ដើម្បីទទួលបាន Chat ID សូមបើក Telegram រួចស្វែងរក @InventoryAlert24Bot ហើយចុច Start ឬផ្ញើសារ 'hi' រួចចុច 'Detect Chat ID'។",
-                Font = Theme.FontCaption,
-                ForeColor = Theme.TextMuted,
-                Location = new Point(16, 245),
-                AutoSize = true
             };
 
             telegramCard.Controls.Add(lblTgTitle);
             telegramCard.Controls.Add(lblTgSub);
+            telegramCard.Controls.Add(lblTgBadge);
+            telegramCard.Controls.Add(chkTgEnabled);
             telegramCard.Controls.Add(lblTgToken);
             telegramCard.Controls.Add(txtTgToken);
             telegramCard.Controls.Add(lblTgChatId);
             telegramCard.Controls.Add(txtTgChatId);
-            telegramCard.Controls.Add(chkTgEnabled);
             telegramCard.Controls.Add(btnDetectChat);
             telegramCard.Controls.Add(btnTestTg);
             telegramCard.Controls.Add(btnSaveTg);
-            telegramCard.Controls.Add(lblTgStatus);
             telegramCard.Controls.Add(lblTgTip);
+            telegramCard.Controls.Add(lblTgStatus);
 
-            var spacerTg = new Panel { Dock = DockStyle.Top, Height = 16, BackColor = Color.Transparent };
-
-            // Card 3: OOAD Architecture Specifications
-            var ooadCard = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 260,
-                BackColor = Color.White,
-                Padding = new Padding(20)
-            };
-            ooadCard.Paint += (s, e) => { using var p = new Pen(Theme.CardBorder, 1f); e.Graphics.DrawRectangle(p, 0, 0, ooadCard.Width - 1, ooadCard.Height - 1); };
-
-            var lblOoad = new Label { Text = "OOAD 3-Tier Architecture Verification", Font = Theme.FontHeadingSm, ForeColor = Theme.TextDark, Location = new Point(16, 16), AutoSize = true };
-            var lblOoadDesc = new Label
-            {
-                Text = "• Presentation Layer: Modern Flat WinForms with LiveCharts v2 visualization.\n" +
-                       "• Business Logic Layer: IInventoryService, Domain Invariant Enforcement (Product.CanDeductStock).\n" +
-                       "• Data Access Layer: ADO.NET Repositories (ProductRepository, TransactionRepository) with atomic SqlTransaction rollback.\n" +
-                       "• Domain Exception Hierarchy: InsufficientStockException, DuplicateSkuException, EntityNotFoundException.\n" +
-                       "• Security & RBAC: SHA-256 password hashing with Admin / Staff role segregation.",
-                Font = Theme.FontBody,
-                ForeColor = Theme.TextDark,
-                Location = new Point(16, 45),
-                Size = new Size(720, 140)
-            };
-
-            var lblProfile = new Label
-            {
-                Text = $"Current Logged-in Operator: {CurrentUser.FullName} (Username: {CurrentUser.Username} | Role: {CurrentUser.Role})",
-                Font = Theme.FontBodyBold,
-                ForeColor = Theme.PrimaryHover,
-                Location = new Point(16, 195),
-                AutoSize = true
-            };
-
-            ooadCard.Controls.Add(lblOoad);
-            ooadCard.Controls.Add(lblOoadDesc);
-            ooadCard.Controls.Add(lblProfile);
-
-            // Adding: ooadCard -> spacerTg -> telegramCard -> spacer -> dbCard
-            // Results in top-to-bottom layout: dbCard -> spacer -> telegramCard -> spacerTg -> ooadCard
-            _panelSettingsView.Controls.Add(ooadCard);
-            _panelSettingsView.Controls.Add(spacerTg);
             _panelSettingsView.Controls.Add(telegramCard);
-            _panelSettingsView.Controls.Add(spacer);
-            _panelSettingsView.Controls.Add(dbCard);
 
             _contentContainer.Controls.Add(_panelSettingsView);
         }
@@ -2003,38 +1977,40 @@ namespace Inventory_Management_System.UI
                 CreatedAt = u.CreatedAt.ToString("yyyy-MM-dd HH:mm")
             }).ToList();
 
-            _gridUsers.DataSource = null;
             _gridUsers.DataSource = filtered;
 
-            if (_gridUsers.Columns["UserID"] is { } colId)
+            if (_gridUsers.Columns != null && _gridUsers.Columns.Count > 0)
             {
-                colId.HeaderText = "User ID";
-                colId.Width = 85;
-            }
-            if (_gridUsers.Columns["Username"] is { } colUser)
-            {
-                colUser.HeaderText = "Username";
-                colUser.Width = 160;
-            }
-            if (_gridUsers.Columns["FullName"] is { } colName)
-            {
-                colName.HeaderText = "Full Display Name";
-                colName.Width = 240;
-            }
-            if (_gridUsers.Columns["Role"] is { } colRole)
-            {
-                colRole.HeaderText = "Assigned Role";
-                colRole.Width = 160;
-            }
-            if (_gridUsers.Columns["Status"] is { } colStatus)
-            {
-                colStatus.HeaderText = "Session Status";
-                colStatus.Width = 140;
-            }
-            if (_gridUsers.Columns["CreatedAt"] is { } colDate)
-            {
-                colDate.HeaderText = "Created Date";
-                colDate.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                if (_gridUsers.Columns.Contains("UserID") && _gridUsers.Columns["UserID"] is { } colId)
+                {
+                    colId.HeaderText = "User ID";
+                    colId.FillWeight = 12;
+                }
+                if (_gridUsers.Columns.Contains("Username") && _gridUsers.Columns["Username"] is { } colUser)
+                {
+                    colUser.HeaderText = "Username";
+                    colUser.FillWeight = 20;
+                }
+                if (_gridUsers.Columns.Contains("FullName") && _gridUsers.Columns["FullName"] is { } colName)
+                {
+                    colName.HeaderText = "Full Display Name";
+                    colName.FillWeight = 28;
+                }
+                if (_gridUsers.Columns.Contains("Role") && _gridUsers.Columns["Role"] is { } colRole)
+                {
+                    colRole.HeaderText = "Assigned Role";
+                    colRole.FillWeight = 18;
+                }
+                if (_gridUsers.Columns.Contains("Status") && _gridUsers.Columns["Status"] is { } colStatus)
+                {
+                    colStatus.HeaderText = "Session Status";
+                    colStatus.FillWeight = 16;
+                }
+                if (_gridUsers.Columns.Contains("CreatedAt") && _gridUsers.Columns["CreatedAt"] is { } colDate)
+                {
+                    colDate.HeaderText = "Created Date";
+                    colDate.FillWeight = 20;
+                }
             }
         }
 
